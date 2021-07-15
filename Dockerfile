@@ -5,4 +5,4 @@ ADD app.py /app.py
 RUN pip install --upgrade streamlit astropy matplotlib
 RUN pip install --upgrade oda-api
 
-ENTRYPOINT  streamlit run /app.py --server.port 8000
+ENTRYPOINT  streamlit run /app.py --server.port 8000 --server.address 0.0.0.0

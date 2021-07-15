@@ -10,4 +10,6 @@ run: build
 	docker run -it -p 8000:8000 $(IMAGE)
 
 deploy:
-	helm upgrade --install  streamlit-acs . -f values-unige-dstic-production.yaml
+	helm upgrade --install  streamlit-acs . \
+		-f values-unige-dstic-production.yaml \
+		--set image.tag="$(shell git describe --tags --always)" 
