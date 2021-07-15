@@ -2,3 +2,4 @@ streamlit
 astropy
 matplotlib
 oda-api
+integral-client
