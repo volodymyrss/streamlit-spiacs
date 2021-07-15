@@ -59,7 +59,7 @@ def load_lc(t0, dt_s):
     d = disp.get_product(
         instrument="spi_acs",
         product="spi_acs_lc",
-        time_bin=2,
+        time_bin=0.1,
         T_format="isot",
         T1=t1_isot,
         T2=t2_isot,
@@ -85,42 +85,35 @@ st.sidebar.markdown("## Select Data Time")
 select_event = st.sidebar.selectbox('How do you want to find data?',
                                     ['By event name', 'By UTC'])
 
-if select_event == 'By GPS':
+if select_event == 'By UTC':
     # -- Set a GPS time:        
     t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
     #t0 = float(str_t0)
 
-    st.sidebar.markdown("""
-    Example times in the H1 detector:
-    * 1126259462.4    (GW150914) 
-    * 1187008882.4    (GW170817) 
-    * 933200215       (hardware injection)
-    * 1132401286.33   (Koi Fish Glitch) 
-    """)
+    # st.sidebar.markdown("""
+    # Example times in the H1 detector:
+    # * 1126259462.4    (GW150914) 
+    # * 1187008882.4    (GW170817) 
+    # * 933200215       (hardware injection)
+    # * 1132401286.33   (Koi Fish Glitch) 
+    # """)
 
 else:
-    t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
+    #t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
+
+
+    eventlist = {
+        "GRB170817A": '2017-08-17T12:41:00',
+        "GRB080319B": '2008-03-19T06:12:44',
+    }
     
-    #chosen_event = st.sidebar.selectbox('Select Event', eventlist)
-    # t0 = datasets.event_gps(chosen_event)
-    # detectorlist = list(datasets.event_detectors(chosen_event))
-    # detectorlist.sort()
-    # st.subheader(chosen_event)
-    # st.write('GPS:', t0)
+    chosen_event = st.sidebar.selectbox('Select Event', list(eventlist.keys()))
     
-    # # -- Experiment to display masses
-    # try:
-    #     jsoninfo = fetch_event_json(chosen_event)
-    #     for name, nameinfo in jsoninfo['events'].items():        
-    #         st.write('Mass 1:', nameinfo['mass_1_source'], 'M$_{\odot}$')
-    #         st.write('Mass 2:', nameinfo['mass_2_source'], 'M$_{\odot}$')
-    #         #st.write('Distance:', int(nameinfo['luminosity_distance']), 'Mpc')
-    #         st.write('Network SNR:', int(nameinfo['network_matched_filter_snr']))
-    #         eventurl = 'https://gw-osc.org/eventapi/html/event/{}'.format(chosen_event)
-    #         st.markdown('Event page: {}'.format(eventurl))
-    #         st.write('\n')
-    # except:
-    #     pass
+    t0 = eventlist[chosen_event]
+    
+    st.subheader(chosen_event)
+    st.write('GPS:', t0)
+    
 
 
     
