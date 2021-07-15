@@ -34,7 +34,7 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:")
 #detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('SPI-ACS Quickview')
+st.title('SPI-ACS + ISGRI Quickview')
 
 st.markdown("""
  * Use the menu at left to select data and set plot parameters
@@ -71,6 +71,49 @@ def load_lc(t0, dt_s):
 
     return lc
 
+@st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
+def load_isgri(t0, dt_s):
+    _t0 = Time(t0, format="isot")
+
+    disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
+
+    t1_isot = Time(_t0.mjd - dt_s/24/3600, format="mjd").isot
+    t2_isot = Time(_t0.mjd + dt_s/24/3600, format="mjd").isot
+
+    print("t1, t2", t1_isot, t2_isot)
+
+    import integralclient as ic
+
+    d = ic.converttime("UTC", _t0.isot, "ANY")
+
+    print(d)
+
+    scw = d['SCWID']
+
+    print("scw:", scw)
+
+    import io
+    from astropy.io import fits
+
+    url = f"http://isdcarc.unige.ch//arc/rev_3/scw/{scw[:4]}/{scw}.001/isgri_events.fits.gz"
+
+    print("url", url)
+
+    c = requests.get(url).content 
+    # f = io.BytesIO(
+    #     #requests.get(f"https://isdcarc.unige.ch/arc/FTP/arc_distr/NRT/public/scw/{scw[:4]}/{scw}/isgri_events.fits.gz").content
+    #     c
+    # )
+    # f.seek(0)
+
+    with open("tmp.fits.gz", "wb") as _:
+        _.write(c)
+    
+    f = fits.open("tmp.fits.gz")
+    d = f[3].data
+
+    return d
+
 st.sidebar.markdown("## Select Data Time")
 
 # -- Get list of events
@@ -87,7 +130,7 @@ select_event = st.sidebar.selectbox('How do you want to find data?',
 
 if select_event == 'By UTC':
     # -- Set a GPS time:        
-    t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
+    t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44').strip()    # -- GW150914
     #t0 = float(str_t0)
 
     # st.sidebar.markdown("""
@@ -105,16 +148,16 @@ else:
     eventlist = {
         "GRB170817A": '2017-08-17T12:41:00',
         "GRB080319B": '2008-03-19T06:12:44',
+        "GRB120711A": "2012-07-11T02:45:30.0",
     }
     
-    chosen_event = st.sidebar.selectbox('Select Event', list(eventlist.keys()))
+    chosen_event = st.sidebar.selectbox('Select Event', sorted(list(eventlist.keys())))
     
     t0 = eventlist[chosen_event]
     
     st.subheader(chosen_event)
     st.write('GPS:', t0)
     
-
 
     
 #-- Choose detector as H1, L1, or V1
@@ -124,6 +167,9 @@ else:
 st.sidebar.markdown('## Set Plot Parameters')
 dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 100.0)  # min, max, default
 dt_s = dtboth / 2.0
+
+isgri_events = deepcopy(load_isgri(t0, dt_s))
+
 
 # st.sidebar.markdown('#### Whitened and band-passed data')
 # whiten = st.sidebar.checkbox('Whiten?', value=True)
@@ -167,6 +213,20 @@ with _lock:
     plt.plot(lc['TIME'], lc['RATE'])
     #fig1 = cropped.plot()
     st.pyplot(fig1, clear_figure=True)
+
+st.subheader('ISGRI')
+#center = int(t0)
+#lc = deepcopy(lc)
+
+
+with _lock:
+    # fig1 = lc.crop(cropstart, cropend).plot()
+    fig2 = plt.figure()
+    h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 100))
+
+    plt.step(h[1][:-1], h[0])
+    #fig1 = cropped.plot()
+    st.pyplot(fig2, clear_figure=True)
 
 
 # -- Try whitened and band-passed plot
