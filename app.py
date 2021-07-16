@@ -71,6 +71,9 @@ def load_lc(t0, dt_s):
 
     return lc
 
+import integralclient as ic
+
+
 @st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
 def load_isgri(t0, dt_s):
     _t0 = Time(t0, format="isot")
@@ -113,6 +116,30 @@ def load_isgri(t0, dt_s):
     d = f[3].data
 
     return d
+
+@st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
+def load_isgri_image(t0):
+    _t0 = Time(t0, format="isot")
+
+    d = ic.converttime("UTC", _t0.isot, "ANY")
+
+    print(d)
+
+    scw = d['SCWID']
+
+    print("scw:", scw)
+
+    disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
+    ima = disp.get_product(
+        instrument="isgri", 
+        product="isgri_image", 
+        product_type='Real',
+        osa_version="OSA10.2",
+        scw_list=[f"{scw}.001"]
+    )
+
+    return ima.mosaic_image_0_mosaic.data_unit[4].data
+
 
 st.sidebar.markdown("## Select Data Time")
 
@@ -168,7 +195,9 @@ st.sidebar.markdown('## Set Plot Parameters')
 dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 100.0)  # min, max, default
 dt_s = dtboth / 2.0
 
-isgri_events = deepcopy(load_isgri(t0, dt_s))
+isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
+
+isgri_image = load_isgri_image(t0).copy()
 
 
 # st.sidebar.markdown('#### Whitened and band-passed data')
@@ -206,6 +235,21 @@ strain_load_state.text('Loading data...done!')
 st.subheader('Raw data')
 #center = int(t0)
 #lc = deepcopy(lc)
+
+
+with _lock:
+    from matplotlib import pylab as plt
+    import numpy as np
+
+    levels=np.linspace(1,10, 100)
+    d = isgri_image
+
+    d[d<levels[0]] = levels[0]
+    d[d>levels[-1]] = levels[-1]
+
+    fig3 = plt.figure(figsize=(10,10))
+    plt.contourf(d, levels=levels, cmap="jet")
+    st.pyplot(fig3, clear_figure=True)
 
 with _lock:
     # fig1 = lc.crop(cropstart, cropend).plot()
