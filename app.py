@@ -8,6 +8,8 @@ import requests, os
 from copy import deepcopy
 import base64
 
+from astropy.time import Time
+
 # Use the non-interactive Agg backend, which is recommended as a
 # thread-safe backend.
 # See https://matplotlib.org/3.3.2/faq/howto_faq.html#working-with-threads.
@@ -34,7 +36,7 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:")
 #detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('SPI-ACS POLAR + ISGRI Quickview')
+st.title('SPI-ACS, POLAR + ISGRI Quickview')
 
 st.markdown("""
  * Use the menu at left to select data and set plot parameters
@@ -300,10 +302,16 @@ def rebin(S, n):
 
 with _lock:
     # fig1 = lc.crop(cropstart, cropend).plot()
-    fig1 = plt.figure()
+    fig1 = plt.figure(figsize=(12,6))
 
-    plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'])
+    x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
+    plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
     #fig1 = cropped.plot()
+
+    plt.title("INTEGRAL/SPI-ACS")
+    plt.ylabel("counts/s")
+    plt.xlabel(f"seconds since {t0}")
+
     st.pyplot(fig1, clear_figure=True)
 
 if polar_lc is not None:
@@ -316,9 +324,21 @@ if polar_lc is not None:
         polar_lc = np.stack(polar_lc)
 
         # fig1 = lc.crop(cropstart, cropend).plot()
-        fig2 = plt.figure()
-        plt.plot(polar_lc['time'], polar_lc['rate'])
+        fig2 = plt.figure(figsize=(12,6))
+
+        t = Time(polar_lc['time'], format="unix").unix - Time(t0, format="isot").unix
+
+        plt.title("POLAR")
+
+        x = plt.errorbar( t, polar_lc['rate'], polar_lc['rate_err'], ls="")
+        plt.ylabel("counts/s")
+        plt.step( t, polar_lc['rate'], where='mid', c=x[0].get_color())
         #fig1 = cropped.plot()
+
+        #fig1 = cropped.plot()
+
+        plt.xlabel(f"seconds since {t0}")
+
         st.pyplot(fig2, clear_figure=True)
 
 
@@ -411,12 +431,7 @@ See also:
 
 st.subheader("About this app")
 st.markdown("""
-This app displays data from LIGO, Virgo, and GEO downloaded from
-the Gravitational Wave Open Science Center at https://gw-openscience.org .
-
-
-You can see how this works in the [Quickview Jupyter Notebook](https://github.com/losc-tutorial/quickview) or 
-[see the code](https://github.com/jkanner/streamlit-dataview).
+This app displays data from INTEGRAL and POLAR, downloaded from https://www.astro.unige.ch/mmoda/ .
 
 """)
 
