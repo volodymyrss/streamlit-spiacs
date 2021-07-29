@@ -192,7 +192,7 @@ select_event = st.sidebar.selectbox('How do you want to find data?',
 
 if select_event == 'By UTC':
     # -- Set a GPS time:        
-    t0 = st.sidebar.text_input('UTC', '2017-01-18T16:16:26').strip()    # -- GW150914
+    t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
     #t0 = float(str_t0)
 
     # st.sidebar.markdown("""
