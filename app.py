@@ -34,7 +34,7 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:")
 #detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('SPI-ACS + ISGRI Quickview')
+st.title('SPI-ACS POLAR + ISGRI Quickview')
 
 st.markdown("""
  * Use the menu at left to select data and set plot parameters
@@ -45,7 +45,7 @@ import oda_api.api
 
 from astropy.time import Time
 
-@st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_lc(t0, dt_s):
     _t0 = Time(t0, format="isot")
 
@@ -71,10 +71,43 @@ def load_lc(t0, dt_s):
 
     return lc
 
+
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_polar_lc(t0, dt_s):
+    _t0 = Time(t0, format="isot")
+
+    disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
+
+    t1_isot = Time(_t0.mjd - dt_s/24/3600, format="mjd").isot
+    t2_isot = Time(_t0.mjd + dt_s/24/3600, format="mjd").isot
+
+    print("t1, t2", t1_isot, t2_isot)
+
+    d = disp.get_product(
+        instrument="polar",
+        product="polar_lc",
+        time_bin=0.1,
+        T_format="isot",
+        T1=t1_isot,
+        T2=t2_isot,
+        product_type='Real',
+    )
+
+    print(dir(d))
+
+    lc = d.polar_lc_0_lc.data_unit[1].data
+
+    print("lc", lc)
+    
+
+    return lc
+
+
 import integralclient as ic
 
 
-@st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
+
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_isgri(t0, dt_s):
     _t0 = Time(t0, format="isot")
 
@@ -117,7 +150,7 @@ def load_isgri(t0, dt_s):
 
     return d
 
-@st.cache(ttl=3600, max_entries=10)   #-- Magic command to cache data
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_isgri_image(t0):
     _t0 = Time(t0, format="isot")
 
@@ -153,11 +186,11 @@ st.sidebar.markdown("## Select Data Time")
 
 #-- Set time by GPS or event
 select_event = st.sidebar.selectbox('How do you want to find data?',
-                                    ['By event name', 'By UTC'])
+                                    ['By UTC', 'By event name'])
 
 if select_event == 'By UTC':
     # -- Set a GPS time:        
-    t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44').strip()    # -- GW150914
+    t0 = st.sidebar.text_input('UTC', '2017-01-18T16:16:26').strip()    # -- GW150914
     #t0 = float(str_t0)
 
     # st.sidebar.markdown("""
@@ -192,12 +225,12 @@ else:
 
 # -- Create sidebar for plot controls
 st.sidebar.markdown('## Set Plot Parameters')
-dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 100.0)  # min, max, default
+dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 10.0)  # min, max, default
 dt_s = dtboth / 2.0
 
-isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
 
-isgri_image = load_isgri_image(t0).copy()
+#isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
+#isgri_image = load_isgri_image(t0).copy()
 
 
 # st.sidebar.markdown('#### Whitened and band-passed data')
@@ -211,6 +244,13 @@ isgri_image = load_isgri_image(t0).copy()
 # qcenter = st.sidebar.slider('Q-value', 5, 120, 5)  # min, max, default
 # qrange = (int(qcenter*0.8), int(qcenter*1.2))
 
+try:
+    polar_lc = load_polar_lc(t0, dt_s)
+except Exception as e:
+    raise
+    polar_lc = None
+
+    
 
 #-- Create a text element and let the reader know the data is loading.
 strain_load_state = st.text('Loading data...this may take a minute')
@@ -221,7 +261,9 @@ except Exception as e:
     st.text('Data load failed.  Try a different time and detector pair.')
     st.text('Problems can be reported to gwosc@igwn.org')
     raise st.script_runner.StopException
-    
+
+
+
 strain_load_state.text('Loading data...done!')
 
 #-- Make a time series plot
@@ -237,40 +279,63 @@ st.subheader('Raw data')
 #lc = deepcopy(lc)
 
 
-with _lock:
-    from matplotlib import pylab as plt
-    import numpy as np
+if False:
+    with _lock:
+        from matplotlib import pylab as plt
+        import numpy as np
 
-    levels=np.linspace(1,10, 100)
-    d = isgri_image
+        levels=np.linspace(1,10, 100)
+        d = isgri_image
 
-    d[d<levels[0]] = levels[0]
-    d[d>levels[-1]] = levels[-1]
+        d[d<levels[0]] = levels[0]
+        d[d>levels[-1]] = levels[-1]
 
-    fig3 = plt.figure(figsize=(10,10))
-    plt.contourf(d, levels=levels, cmap="jet")
-    st.pyplot(fig3, clear_figure=True)
+        fig3 = plt.figure(figsize=(10,10))
+        plt.contourf(d, levels=levels, cmap="jet")
+        st.pyplot(fig3, clear_figure=True)
+
+
+def rebin(S, n):
+    S = S[:]
 
 with _lock:
     # fig1 = lc.crop(cropstart, cropend).plot()
     fig1 = plt.figure()
-    plt.plot(lc['TIME'], lc['RATE'])
+
+    plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'])
     #fig1 = cropped.plot()
     st.pyplot(fig1, clear_figure=True)
+
+if polar_lc is not None:
+    with _lock:
+        polar_lc = np.array(polar_lc)
+        #print("polar_lc", polar_lc)
+        print("polar_lc", polar_lc.shape)
+        print("polar_lc", np.array(polar_lc[0]).dtype)
+
+        polar_lc = np.stack(polar_lc)
+
+        # fig1 = lc.crop(cropstart, cropend).plot()
+        fig2 = plt.figure()
+        plt.plot(polar_lc['time'], polar_lc['rate'])
+        #fig1 = cropped.plot()
+        st.pyplot(fig2, clear_figure=True)
+
 
 st.subheader('ISGRI')
 #center = int(t0)
 #lc = deepcopy(lc)
 
 
-with _lock:
-    # fig1 = lc.crop(cropstart, cropend).plot()
-    fig2 = plt.figure()
-    h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 100))
+if False:
+    with _lock:
+        # fig1 = lc.crop(cropstart, cropend).plot()
+        fig2 = plt.figure()
+        h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 100))
 
-    plt.step(h[1][:-1], h[0])
-    #fig1 = cropped.plot()
-    st.pyplot(fig2, clear_figure=True)
+        plt.step(h[1][:-1], h[0])
+        #fig1 = cropped.plot()
+        st.pyplot(fig2, clear_figure=True)
 
 
 # -- Try whitened and band-passed plot
