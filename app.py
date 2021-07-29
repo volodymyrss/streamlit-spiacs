@@ -30,8 +30,7 @@ _lock = RendererAgg.lock
 # -- Set page config
 apptitle = 'ODA Quickview'
 
-st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:")
-
+st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:", layout="wide")
 # -- Default detector list
 #detectorlist = ['H1','L1', 'V1']
 
@@ -46,6 +45,7 @@ st.markdown("""
 import oda_api.api
 
 from astropy.time import Time
+
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_lc(t0, dt_s):
@@ -113,6 +113,11 @@ def load_integral_time(t0):
     d = ic.converttime("UTC", _t0.isot, "ANY")
     return d
 
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_integral_sc(t0):
+    _t0 = Time(t0, format="isot")
+    d = ic.get_sc(_t0.isot)
+    return d
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
@@ -247,20 +252,39 @@ dt_s = dtboth / 2.0
 
 
 integral_time = load_integral_time(t0)
+integral_sc = load_integral_sc(t0)
 
-st.markdown(f"""
-INTEGRAL ScW: {integral_time['SCWID']}
-
+integral_reports = """
 * [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
 * [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
-""")
+"""
+
+
+st.markdown(f"""
+
+## INTEGRAL context
+
+INTEGRAL ScW: {integral_time['SCWID']}
+
+{integral_sc['bodies']['earth']['separation']} km from Earth
+Pointing to RA={integral_sc['scx']['ra']}, Dec={integral_sc['scx']['dec']}
+
+""" + integral_reports)
+
+
+# st.markdown(f"""
+# ## POLAR context
+# """)
 
 try:
     ibis_veto_lc = load_ibis_veto(t0, dt_s)
 except Exception as e:
     ibis_veto_lc = None
 
-#isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
+try:
+    isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
+except:
+    isgri_events = None
 #isgri_image = load_isgri_image(t0).copy()
 
 
@@ -278,7 +302,6 @@ except Exception as e:
 try:
     polar_lc = load_polar_lc(t0, dt_s)
 except Exception as e:
-    raise
     polar_lc = None
 
     
@@ -331,7 +354,7 @@ def rebin(S, n):
 
 with _lock:
     # fig1 = lc.crop(cropstart, cropend).plot()
-    fig1 = plt.figure(figsize=(12,6))
+    fig1 = plt.figure(figsize=(12,4))
 
     x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
     plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
@@ -340,8 +363,14 @@ with _lock:
     plt.title("INTEGRAL/SPI-ACS")
     plt.ylabel("counts/s")
     plt.xlabel(f"seconds since {t0}")
+    plt.xlim([-dt_s, dt_s])
 
     st.pyplot(fig1, clear_figure=True)
+
+with st.beta_expander("See notes"):
+    st.markdown(f"""
+Total SPI-ACS rate, 100ms bins. Sensitive to whole sky, but less sensitive to directions around spacecraft pointing direction and especially the direction opposite to it. See above for the direction.
+""")
 
 if polar_lc is not None:
     with _lock:
@@ -353,7 +382,7 @@ if polar_lc is not None:
         polar_lc = np.stack(polar_lc)
 
         # fig1 = lc.crop(cropstart, cropend).plot()
-        fig2 = plt.figure(figsize=(12,6))
+        fig2 = plt.figure(figsize=(12,4))
 
         t = Time(polar_lc['time'], format="unix").unix - Time(t0, format="isot").unix
 
@@ -367,8 +396,11 @@ if polar_lc is not None:
         #fig1 = cropped.plot()
 
         plt.xlabel(f"seconds since {t0}")
+        plt.xlim([-dt_s, dt_s])
 
         st.pyplot(fig2, clear_figure=True)
+else:
+    st.markdown("POLAR data could not be retrieved! Is it out of the missin span?")
 
 
 
@@ -377,9 +409,9 @@ if ibis_veto_lc is not None:
         polar_lc = np.array(polar_lc)
         
         # fig1 = lc.crop(cropstart, cropend).plot()
-        fig3 = plt.figure(figsize=(12,6))
+        fig3 = plt.figure(figsize=(12,4))
 
-        t = Time(ibis_veto_lc['time'], format="unix").unix - Time(t0, format="isot").unix
+        t = ibis_veto_lc['time'] - dt_s
 
         plt.title("IBIS/Veto")
 
@@ -389,24 +421,55 @@ if ibis_veto_lc is not None:
         plt.step( t, ibis_veto_lc['rate'], where='mid', c=x[0].get_color())
         
         plt.xlabel(f"seconds since {t0}")
+        plt.xlim([-dt_s, dt_s])
 
         st.pyplot(fig3, clear_figure=True)
 
+    with st.beta_expander("See notes"):
+        st.markdown(f"""
+    Total IBIS Veto rate, 8s bins. Sensitive primarily to directions opposite to the spacecraft pointing direction. See above for the direction.
+    Note that this rate also contains periodic high bins, encoding different kind  of data. They should not be mistook for GRBs.
+    """)
+else:
+    st.markdown("IBIS Veto data could not be retrieved!")
+    with st.beta_expander("See notes"):
+        st.markdown("Please consult the operations reports:\n" + integral_reports)
 
-st.subheader('ISGRI')
+
+
+#st.subheader('ISGRI')
 #center = int(t0)
 #lc = deepcopy(lc)
 
 
-if False:
+if isgri_events is not None:
     with _lock:
         # fig1 = lc.crop(cropstart, cropend).plot()
-        fig2 = plt.figure()
-        h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 100))
+        fig2 = plt.figure(figsize=(12,4))
+        h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 300))
 
-        plt.step(h[1][:-1], h[0])
+        plt.step(
+            (h[1][1:] + h[1][:-1]), 
+            h[0]/(h[1][1:] - h[1][:-1]))
         #fig1 = cropped.plot()
+
+        plt.xlabel(f"seconds since {t0}")
+        plt.ylabel("counts / s (full energy range)")
+        plt.title("ISGRI total rate")
+        plt.xlim([-dt_s, dt_s])
+
         st.pyplot(fig2, clear_figure=True)
+
+    with st.beta_expander("See notes"):
+        st.markdown(f"""
+    Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
+    """)
+else:
+    st.markdown("ISGRI data could not be retrieved!")
+    with st.beta_expander("See notes"):
+        st.markdown("Please consult the operations reports:\n" + integral_reports)
+
+
 
 
 # -- Try whitened and band-passed plot
@@ -456,28 +519,6 @@ if False:
 #     ax.set_yscale('log')
 #     ax.set_ylim(bottom=15)
 #     st.pyplot(fig4, clear_figure=True)
-
-
-with st.beta_expander("See notes"):
-
-    st.markdown("""
-A Q-transform plot shows how a signal’s frequency changes with time.
-
- * The x-axis shows time
- * The y-axis shows frequency
-
-The color scale shows the amount of “energy” or “signal power” in each time-frequency pixel.
-
-A parameter called “Q” refers to the quality factor.  A higher quality factor corresponds to a larger number of cycles in each time-frequency pixel.  
-
-For gravitational-wave signals, binary black holes are most clear with lower Q values (Q = 5-20), where binary neutron star mergers work better with higher Q values (Q = 80 - 120).
-
-See also:
-
- * [GWpy q-transform](https://gwpy.github.io/docs/stable/examples/timeseries/qscan.html)
- * [Reading Time-frequency plots](https://labcit.ligo.caltech.edu/~jkanner/aapt/web/math.html#tfplot)
- * [Shourov Chatterji PhD Thesis](https://dspace.mit.edu/handle/1721.1/34388)
-""")
 
 
 st.subheader("About this app")
