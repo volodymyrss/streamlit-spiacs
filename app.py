@@ -8,7 +8,11 @@ import requests, os
 from copy import deepcopy
 import base64
 
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
+from astropy import units as u
+import io
+from astropy.io import fits
+
 
 # Use the non-interactive Agg backend, which is recommended as a
 # thread-safe backend.
@@ -113,6 +117,43 @@ def load_integral_time(t0):
     d = ic.converttime("UTC", _t0.isot, "ANY")
     return d
 
+
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_fermi_time(t0):
+    import requests
+    import re
+
+    xtime_url="https://heasarc.gsfc.nasa.gov/cgi-bin/Tools/xTime/xTime.pl"
+    pattern='<tr>(.*?)</tr>'
+    #sub_pattern='.*?<th scope=row><label for="(.*?)">.*?</label></th>.*?<td align=center>.*?</td>.*?<td>(.*?)</td>.*?'
+    sub_pattern='<th scope=row><label for="(.*?)">.*?</label></th>.*?<td align=center>.*?</td>.*?<td.*?>(.*?)</td>'
+    #pattern='<tr>.*?<th scope=row><label for="(.*?)">.*?</label></th>.*?<td align=center>.*?</td>.*?<td>(.*?)</td>.*?</tr>'
+
+    def queryxtime(**args):
+        args={**args, 
+              **dict(
+                    timesys_in="u",
+                    timesys_out="u",
+                    apply_clock_offset="yes")
+                }
+
+        content=requests.get(xtime_url,params=args).text
+
+        #print("content",content)
+
+        r=[]
+        
+        for tr in re.findall(pattern,content,re.S):
+            print("tr",tr)
+            s = dict(re.findall(sub_pattern,tr,re.S))
+            print("s",s)
+
+            r+=list(s.items())
+
+        return dict(r)
+
+    return queryxtime(time_in_i=t0)
+
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_integral_sc(t0):
     _t0 = Time(t0, format="isot")
@@ -140,9 +181,6 @@ def load_isgri(t0, dt_s):
     scw = d['SCWID']
 
     print("scw:", scw)
-
-    import io
-    from astropy.io import fits
 
     url = f"http://isdcarc.unige.ch//arc/rev_3/scw/{scw[:4]}/{scw}.001/isgri_events.fits.gz"
 
@@ -209,6 +247,7 @@ st.sidebar.markdown("## Select Data Time")
 select_event = st.sidebar.selectbox('How do you want to find data?',
                                     ['By UTC', 'By event name'])
 
+
 if select_event == 'By UTC':
     # -- Set a GPS time:        
     t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
@@ -230,6 +269,7 @@ else:
         "GRB170817A": '2017-08-17T12:41:00',
         "GRB080319B": '2008-03-19T06:12:44',
         "GRB120711A": "2012-07-11T02:45:30.0",
+        "GRB190114C": "2019-01-14T20:57:02.38"
     }
     
     chosen_event = st.sidebar.selectbox('Select Event', sorted(list(eventlist.keys())))
@@ -239,6 +279,7 @@ else:
     st.subheader(chosen_event)
     st.write('GPS:', t0)
     
+use_gbm = st.sidebar.checkbox('Load GBM')
 
     
 #-- Choose detector as H1, L1, or V1
@@ -249,7 +290,11 @@ st.sidebar.markdown('## Set Plot Parameters')
 dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 50.0)  # min, max, default
 dt_s = dtboth / 2.0
 
+t0_xtime = load_fermi_time(t0)
 
+# st.markdown(f"""
+# {t0_xtime}
+# """)
 
 integral_time = load_integral_time(t0)
 integral_sc = load_integral_sc(t0)
@@ -402,6 +447,45 @@ if polar_lc is not None:
 else:
     st.markdown("POLAR data could not be retrieved! Is it out of the missin span?")
 
+import gzip
+
+
+@st.cache(ttl=3600, max_entries=100, persist=True)
+def download_gbm_detector(t0, det):
+    print("downloading gbm")
+    for v in "00", "01", "02":
+        try:
+            url = f"https://heasarc.gsfc.nasa.gov/FTP/fermi/data/gbm/daily/{t0[:4]}/{t0[5:7]}/{t0[8:10]}/current/glg_ctime_{det}_{t0[2:4]}{t0[5:7]}{t0[8:10]}_v{v}.pha"
+            print("url", url)
+            c = requests.get(url).content
+            f = fits.open(io.BytesIO(c))
+            print("counts", f[2].data['COUNTS'].sum(0))
+            print("time", f[2].data['TIME'])
+            print("managed!")
+            return np.copy(f[2].data['COUNTS'].sum(1)), np.copy(f[2].data['TIME'])
+        except Exception as e:
+            print("failed:", e)
+
+    
+
+@st.cache(ttl=3600, max_entries=10, persist=True)
+def load_gbm(t0):
+    d = {}
+    print("loading gbm")
+    for det in [f'n{i:x}' for i in range(12)] + [f'b{i:x}' for i in range(2)]:
+         print(f"det {det} {t0}")
+         d[f'rate_{det}']=download_gbm_detector(t0, det)[0]
+         d[f'time_{det}']=download_gbm_detector(t0, det)[1]
+
+    return d
+
+    
+if use_gbm:
+    try:
+        gbm = load_gbm(t0)
+    except Exception as e:
+        gbm = None
+
 
 
 if ibis_veto_lc is not None:
@@ -469,6 +553,41 @@ else:
     with st.beta_expander("See notes"):
         st.markdown("Please consult the operations reports:\n" + integral_reports)
 
+
+if use_gbm and gbm is not None:
+    with _lock:
+        # fig1 = lc.crop(cropstart, cropend).plot()
+        fig2 = plt.figure(figsize=(12,6))
+        #h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 300))
+
+        for det in [k.replace('time_', '') for k in gbm.keys() if k.startswith('time_')]:
+            t = gbm['time_'+det] - float(t0_xtime['time_in_sf'])
+            
+            # - Time(t0, format='isot')).seconds
+
+            m = t>-dt_s
+            m &= t<dt_s
+
+            plt.step(t[m], gbm['rate_'+det][m], label=det)
+            #fig1 = cropped.plot()
+
+        plt.xlabel(f"seconds since {t0}")
+        plt.ylabel("counts / s (full energy range)")
+        plt.title("GBM")
+
+        plt.legend()
+        #plt.xlim([-dt_s, dt_s])
+
+        st.pyplot(fig2, clear_figure=True)
+
+    with st.beta_expander("See notes"):
+        st.markdown(f"""
+    Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
+    """)
+else:
+    st.markdown("GBM data could not be retrieved!")
+    # with st.beta_expander("See notes"):
+    #     st.markdown("Please consult the operations reports:\n" + integral_reports)
 
 
 
