@@ -107,6 +107,12 @@ def load_polar_lc(t0, dt_s):
 
 import integralclient as ic
 
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_integral_time(t0):
+    _t0 = Time(t0, format="isot")
+    d = ic.converttime("UTC", _t0.isot, "ANY")
+    return d
+
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
@@ -175,6 +181,14 @@ def load_isgri_image(t0):
 
     return ima.mosaic_image_0_mosaic.data_unit[4].data
 
+import io
+
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_ibis_veto(t0, dt_s):
+    t = requests.get(f"https://www.astro.unige.ch/cdci/astrooda/dispatch-data/gw/integralhk/api/v1.0/genlc/IBIS_VETO/{t0}/{dt_s}").json()
+    print("\033[31m", t, "\033[0m")
+    d = np.genfromtxt(io.StringIO(t), names=['ijd', 'time', 'rate', 'x'])
+    return d
 
 st.sidebar.markdown("## Select Data Time")
 
@@ -227,9 +241,24 @@ else:
 
 # -- Create sidebar for plot controls
 st.sidebar.markdown('## Set Plot Parameters')
-dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 10.0)  # min, max, default
+dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 50.0)  # min, max, default
 dt_s = dtboth / 2.0
 
+
+
+integral_time = load_integral_time(t0)
+
+st.markdown(f"""
+INTEGRAL ScW: {integral_time['SCWID']}
+
+* [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
+* [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
+""")
+
+try:
+    ibis_veto_lc = load_ibis_veto(t0, dt_s)
+except Exception as e:
+    ibis_veto_lc = None
 
 #isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
 #isgri_image = load_isgri_image(t0).copy()
@@ -340,6 +369,28 @@ if polar_lc is not None:
         plt.xlabel(f"seconds since {t0}")
 
         st.pyplot(fig2, clear_figure=True)
+
+
+
+if ibis_veto_lc is not None:
+    with _lock:
+        polar_lc = np.array(polar_lc)
+        
+        # fig1 = lc.crop(cropstart, cropend).plot()
+        fig3 = plt.figure(figsize=(12,6))
+
+        t = Time(ibis_veto_lc['time'], format="unix").unix - Time(t0, format="isot").unix
+
+        plt.title("IBIS/Veto")
+
+        x = plt.errorbar( t, ibis_veto_lc['rate'], ibis_veto_lc['rate']**0.5/8, ls="")
+
+        plt.ylabel("counts/s")
+        plt.step( t, ibis_veto_lc['rate'], where='mid', c=x[0].get_color())
+        
+        plt.xlabel(f"seconds since {t0}")
+
+        st.pyplot(fig3, clear_figure=True)
 
 
 st.subheader('ISGRI')
