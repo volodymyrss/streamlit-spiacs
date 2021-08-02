@@ -84,8 +84,14 @@ def load_polar_lc(t0, dt_s):
 
     disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
 
-    t1_isot = Time(_t0.mjd - dt_s/24/3600, format="mjd").isot
-    t2_isot = Time(_t0.mjd + dt_s/24/3600, format="mjd").isot
+    _t1 = Time(_t0.mjd - dt_s/24/3600, format="mjd")
+    _t2 = Time(_t0.mjd + dt_s/24/3600, format="mjd")
+
+    t1_isot = _t1.isot    
+    t2_isot = _t2.isot
+
+    if _t1 < Time("2016-08-01T00:00:00", format="isot") or _t2 > Time("2017-05-01T00:00:00", format="isot"):
+        raise RuntimeError("No POLAR data")
 
     print("t1, t2", t1_isot, t2_isot)
 
@@ -108,7 +114,7 @@ def load_polar_lc(t0, dt_s):
 
     return lc
 
-@st.cache(ttl=3600, max_entries=100, persist=True)   #-- Magic command to cache data
+@st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
 def load_grb_list():
     try:
         import odakb
@@ -257,6 +263,8 @@ st.sidebar.markdown("## Select Data Time")
 # eventlist = list(eventset)
 # eventlist.sort()
 
+
+
 #-- Set time by GPS or event
 select_event = st.sidebar.selectbox('How do you want to find data?',
                                     ['By UTC', 'By event name'])
@@ -278,13 +286,20 @@ if select_event == 'By UTC':
 else:
     #t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
 
+    use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs')
+
+    if use_kg_grb:
+        kg_grb_list = load_grb_list()
+    else:
+        kg_grb_list = {}
 
     eventlist = {
         "GRB170817A": '2017-08-17T12:41:00',
         "GRB080319B": '2008-03-19T06:12:44',
         "GRB120711A": "2012-07-11T02:45:30.0",
         "GRB190114C": "2019-01-14T20:57:02.38",
-        **load_grb_list()
+        #**load_grb_list()
+        **kg_grb_list
     }
 
 
