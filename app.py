@@ -126,8 +126,7 @@ def load_grb_list():
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
-        print("PROBLEM listing GRBs:", e)
-        return {}
+        raise RuntimeError("PROBLEM listing GRBs:", e)
 
 import integralclient as ic
 
@@ -289,7 +288,13 @@ else:
     use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs')
 
     if use_kg_grb:
-        kg_grb_list = load_grb_list()
+        try:
+            kg_grb_list = load_grb_list()
+            st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
+        except Exception as e:
+            st.markdown(f'sorry, could not load GRB list from KG: {e}')
+            kg_grb_list = {}
+
     else:
         kg_grb_list = {}
 
@@ -309,7 +314,7 @@ else:
     t0 = eventlist[chosen_event]
     
     st.subheader(chosen_event)
-    st.write('GPS:', t0)
+    st.write('T0:', t0)
     
 use_gbm = st.sidebar.checkbox('Load GBM')
 
