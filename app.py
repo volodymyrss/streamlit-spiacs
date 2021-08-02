@@ -108,6 +108,16 @@ def load_polar_lc(t0, dt_s):
 
     return lc
 
+@st.cache(ttl=3600, max_entries=100, persist=True)   #-- Magic command to cache data
+def load_grb_list():
+    import odakb
+    D = odakb.sparql.construct(
+        '?g paper:grb_isot ?isot; paper:mentions_named_grb ?name', jsonld=True)
+    return {
+                d["http://odahub.io/ontology/paper#mentions_named_grb"][0]['@value']: d['http://odahub.io/ontology/paper#grb_isot'][0]['@value']            
+            for d in D}
+            #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
+            #sort -r | head -n${nrecent:-20}
 
 import integralclient as ic
 
@@ -269,10 +279,13 @@ else:
         "GRB170817A": '2017-08-17T12:41:00',
         "GRB080319B": '2008-03-19T06:12:44',
         "GRB120711A": "2012-07-11T02:45:30.0",
-        "GRB190114C": "2019-01-14T20:57:02.38"
+        "GRB190114C": "2019-01-14T20:57:02.38",
+        **load_grb_list()
     }
+
+
     
-    chosen_event = st.sidebar.selectbox('Select Event', sorted(list(eventlist.keys())))
+    chosen_event = st.sidebar.selectbox('Select Event', reversed(sorted(list(eventlist.keys()))))
     
     t0 = eventlist[chosen_event]
     
