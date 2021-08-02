@@ -3,4 +3,4 @@ astropy
 matplotlib
 oda-api
 integral-client>=1.1.9
-oda-knowledge-base
+oda-knowledge-base[rdf,cwl]
