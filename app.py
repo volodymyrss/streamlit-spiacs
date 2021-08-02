@@ -20,6 +20,10 @@ from astropy.io import fits
 import matplotlib as mpl
 mpl.use("agg")
 
+import logging
+logging.getLogger("oda.kb.sparql").setLevel('DEBUG')
+
+
 ##############################################################################
 # Workaround for the limited multi-threading support in matplotlib.
 # Per the docs, we will avoid using `matplotlib.pyplot` for figures:
