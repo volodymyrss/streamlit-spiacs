@@ -110,14 +110,18 @@ def load_polar_lc(t0, dt_s):
 
 @st.cache(ttl=3600, max_entries=100, persist=True)   #-- Magic command to cache data
 def load_grb_list():
-    import odakb
-    D = odakb.sparql.construct(
-        '?g paper:grb_isot ?isot; paper:mentions_named_grb ?name', jsonld=True)
-    return {
-                d["http://odahub.io/ontology/paper#mentions_named_grb"][0]['@value']: d['http://odahub.io/ontology/paper#grb_isot'][0]['@value']            
-            for d in D}
-            #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
-            #sort -r | head -n${nrecent:-20}
+    try:
+        import odakb
+        D = odakb.sparql.construct(
+            '?g paper:grb_isot ?isot; paper:mentions_named_grb ?name', jsonld=True)
+        return {
+                    d["http://odahub.io/ontology/paper#mentions_named_grb"][0]['@value']: d['http://odahub.io/ontology/paper#grb_isot'][0]['@value']            
+                for d in D}
+                #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
+                #sort -r | head -n${nrecent:-20}
+    except Exception as e:
+        print("PROBLEM listing GRBs:", e)
+        return {}
 
 import integralclient as ic
 
@@ -463,7 +467,7 @@ else:
 import gzip
 
 
-@st.cache(ttl=3600, max_entries=100, persist=True)
+@st.cache(ttl=360000, max_entries=100, persist=True)
 def download_gbm_detector(t0, det):
     print("downloading gbm")
     for v in "00", "01", "02":
