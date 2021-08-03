@@ -153,7 +153,7 @@ def load_grb_list():
             '?paper paper:mentions_named_grb ?name; paper:grb_isot ?isot', 
             #'?name ?isot ?paper',
             #tojdict=True,
-            limit=40000)
+            limit=31000)
 
         return {
                     d['name']: {
