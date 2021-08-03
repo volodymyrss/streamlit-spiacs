@@ -300,7 +300,7 @@ st.sidebar.markdown("## Select Data Time")
 
 #-- Set time by GPS or event
 select_event = st.sidebar.selectbox('How do you want to find data?',
-                                    ['By UTC', 'By event name'])
+                                    ['By event name', 'By UTC'])
 
 
 if select_event == 'By UTC':
@@ -319,7 +319,7 @@ if select_event == 'By UTC':
 else:
     #t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
 
-    use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs')
+    use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
 
     if use_kg_grb:
         try:
@@ -491,8 +491,16 @@ if False:
         st.pyplot(fig3, clear_figure=True)
 
 
-def rebin(S, n):
-    S = S[:]
+def rebin(S, n, offs=0, mean=True):
+    N = int(len(S)/n)
+    S = S[:N*n]
+
+    if mean:
+        return S.reshape(N, n).mean(1)
+    else:
+        return S.reshape(N, n).sum(1)
+
+
 
 with _lock:
     if lc is None:
@@ -503,6 +511,16 @@ with _lock:
 
         x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
         plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
+
+        for rebin_n in [20,]:
+            t = rebin(lc['TIME'], rebin_n)
+            r = rebin(lc['RATE'], rebin_n)
+            re = rebin(lc['ERROR'] * 20**0.5, rebin_n)
+
+            x = plt.errorbar(t, r, re, ls="")
+            plt.step(t, r, where='mid', c=x[0].get_color())
+    
+
         #fig1 = cropped.plot()
 
         plt.title("INTEGRAL/SPI-ACS")
