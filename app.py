@@ -143,24 +143,36 @@ def load_grb_papers(name):
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
     
-@st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
+@st.cache(ttl=3600, max_entries=1, persist=True)   #-- Magic command to cache data
 def load_grb_list():
     try:
         import odakb
-        D = odakb.sparql.select(
-            '?paper paper:mentions_named_grb ?name; paper:grb_isot ?isot', 
+        D = odakb.sparql.query(
+            '''
+            PREFIX paper: <http://odahub.io/ontology/paper#>
+
+            SELECT * WHERE {
+                ?paper paper:mentions_named_grb ?name; 
+                       paper:grb_isot ?isot .
+            }
+
+            ORDER BY DESC(?isot)
+            LIMIT 100''', 
             #'?name ?isot ?paper',
             #tojdict=True,
-            limit=50000)
+            )
+
+        print(">>>>", D['results']['bindings'][0])
 
         return {
-                    d['name']: {
-                        'isot': d['isot'],
+                    d['name']['value']: {
+                        'isot': d['isot']['value'],
                     }
-                for d in D}
+                for d in D['results']['bindings']}
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
+        raise
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
 
@@ -326,7 +338,7 @@ else:
             kg_grb_list = load_grb_list()
             st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
         except Exception as e:
-            #raise
+            raise
             st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
             kg_grb_list = {}
 
