@@ -140,11 +140,9 @@ def load_grb_papers(name):
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
-        raise
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
     
-
 @st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
 def load_grb_list():
     try:
@@ -163,7 +161,6 @@ def load_grb_list():
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
-#        raise
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
 
@@ -363,9 +360,8 @@ else:
 
     if kg_grb_list != {}:
         D = kg_grb_list[chosen_event]
-        cols = st.beta_columns(3)
-
-        keys = ['paper:DATE', 'paper:NUMBER', 'paper:SUBJECT']
+        
+                
         
         for paper in sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0]):
             cols = st.beta_columns(3)
@@ -377,7 +373,9 @@ else:
         # for k, v in D.items():
         #     cols[0].write(k)
         #     cols[1].write(v[0])
-            
+
+#        st.dataframe(pd.DataFrame(dicts))
+    
         
 use_gbm = st.sidebar.checkbox('Load GBM')
 
