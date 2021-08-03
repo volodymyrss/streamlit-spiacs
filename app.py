@@ -145,8 +145,7 @@ def load_grb_list():
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
-        raise
-        #raise RuntimeError("PROBLEM listing GRBs:", e)
+        raise RuntimeError("PROBLEM listing GRBs:", e)
 
 import integralclient as ic
 
@@ -312,7 +311,6 @@ else:
             kg_grb_list = load_grb_list()
             st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
         except Exception as e:
-            raise
             st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
             kg_grb_list = {}
 
@@ -432,7 +430,6 @@ strain_load_state = st.text('Loading data...this may take a minute')
 try:
     lc = load_lc(t0, dt_s)
 except Exception as e:
-    raise
     st.text('Data load failed.  Try a different time and detector pair.')
     st.text('Problems can be reported to gwosc@igwn.org')
     raise st.script_runner.StopException
