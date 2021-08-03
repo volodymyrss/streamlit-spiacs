@@ -1,3 +1,5 @@
+import json
+from astropy.utils.misc import indent
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -66,18 +68,21 @@ def load_lc(t0, dt_s):
 
     print("t1, t2", t1_isot, t2_isot)
 
-    d = disp.get_product(
-        instrument="spi_acs",
-        product="spi_acs_lc",
-        time_bin=0.1,
-        T_format="isot",
-        T1=t1_isot,
-        T2=t2_isot,
-        product_type='Real',
-    )
-    lc = d.spi_acs_lc_0_query.data_unit[1].data
+    try:
+        d = disp.get_product(
+            instrument="spi_acs",
+            product="spi_acs_lc",
+            time_bin=0.1,
+            T_format="isot",
+            T1=t1_isot,
+            T2=t2_isot,
+            product_type='Real',
+        )
+        lc = d.spi_acs_lc_0_query.data_unit[1].data
 
-    print("lc", lc)
+        print("lc", str(lc)[:300])
+    except oda_api.api.RemoteException:
+        return
 
     return lc
 
@@ -115,22 +120,33 @@ def load_polar_lc(t0, dt_s):
 
     print("lc", lc)
     
-
     return lc
+
+
+    
 
 @st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
 def load_grb_list():
     try:
         import odakb
-        D = odakb.sparql.construct(
-            '?g paper:grb_isot ?isot; paper:mentions_named_grb ?name', jsonld=True)
+        D = odakb.sparql.select(
+            '?paper paper:mentions_named_grb ?name; ?p ?o', 
+            '?paper ?p ?o',
+            tojdict=True,
+            limit=30000)
         return {
-                    d["http://odahub.io/ontology/paper#mentions_named_grb"][0]['@value']: d['http://odahub.io/ontology/paper#grb_isot'][0]['@value']            
-                for d in D}
+                    d['paper:mentions_named_grb'][0]: {
+                        'isot': d['paper:grb_isot'][0],
+                        'papers': [
+                            _d for _k, _d in D.items() if _d['paper:mentions_named_grb'][0] == d['paper:mentions_named_grb'][0]
+                        ]
+                    }
+                for k, d in D.items() if 'paper:grb_isot' in d}
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
-        raise RuntimeError("PROBLEM listing GRBs:", e)
+        raise
+        #raise RuntimeError("PROBLEM listing GRBs:", e)
 
 import integralclient as ic
 
@@ -296,7 +312,8 @@ else:
             kg_grb_list = load_grb_list()
             st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
         except Exception as e:
-            st.markdown(f'sorry, could not load GRB list from KG: {e}')
+            raise
+            st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
             kg_grb_list = {}
 
     else:
@@ -308,7 +325,7 @@ else:
         "GRB120711A": "2012-07-11T02:45:30.0",
         "GRB190114C": "2019-01-14T20:57:02.38",
         #**load_grb_list()
-        **kg_grb_list
+        **{k: d['isot'] for k, d in kg_grb_list.items()}
     }
 
 
@@ -318,8 +335,26 @@ else:
     t0 = eventlist[chosen_event]
     
     st.subheader(chosen_event)
-    st.write('T0:', t0)
-    
+    st.write('T$_0$:', t0)
+
+    if kg_grb_list != {}:
+        D = kg_grb_list[chosen_event]
+        cols = st.beta_columns(3)
+
+        keys = ['paper:DATE', 'paper:NUMBER', 'paper:SUBJECT']
+        
+        for paper in sorted(D['papers'], key=lambda x: x['paper:DATE'][0]):
+            cols = st.beta_columns(3)
+            #cols[0].write(paper.keys())
+            cols[0].write(f"[{paper['paper:NUMBER'][0]}]({paper['paper:location'][0]}) {paper['paper:DATE'][0]}")            
+            cols[1].write(paper['paper:title'][0])
+            #cols[3].write(paper.keys())
+            cols[2].write(paper['paper:gcn_authors'][0][:100]+ "...")
+        # for k, v in D.items():
+        #     cols[0].write(k)
+        #     cols[1].write(v[0])
+            
+        
 use_gbm = st.sidebar.checkbox('Load GBM')
 
     
@@ -439,19 +474,22 @@ def rebin(S, n):
     S = S[:]
 
 with _lock:
-    # fig1 = lc.crop(cropstart, cropend).plot()
-    fig1 = plt.figure(figsize=(12,4))
+    if lc is None:
+        st.markdown("No SPI-ACS data could be retrieved! In the future, we will detect here if it's normal.")
+    else:
+        # fig1 = lc.crop(cropstart, cropend).plot()
+        fig1 = plt.figure(figsize=(12,4))
 
-    x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
-    plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
-    #fig1 = cropped.plot()
+        x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
+        plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
+        #fig1 = cropped.plot()
 
-    plt.title("INTEGRAL/SPI-ACS")
-    plt.ylabel("counts/s")
-    plt.xlabel(f"seconds since {t0}")
-    plt.xlim([-dt_s, dt_s])
+        plt.title("INTEGRAL/SPI-ACS")
+        plt.ylabel("counts/s")
+        plt.xlabel(f"seconds since {t0}")
+        plt.xlim([-dt_s, dt_s])
 
-    st.pyplot(fig1, clear_figure=True)
+        st.pyplot(fig1, clear_figure=True)
 
 with st.beta_expander("See notes"):
     st.markdown(f"""
