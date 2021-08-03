@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import requests, os
 
 from copy import deepcopy
-import base64
+#import base64
+import integralclient as ic
 
 from astropy.time import Time, TimeDelta
 from astropy import units as u
@@ -123,6 +124,25 @@ def load_polar_lc(t0, dt_s):
     return lc
 
 
+@st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
+def load_grb_papers(name):
+    try:
+        import odakb
+        D = odakb.sparql.select(
+            f'?paper paper:mentions_named_grb "{name}"; ?p ?o', 
+            '?paper ?p ?o',
+            tojdict=True,
+            limit=3000)        
+
+        print("D:", D)
+
+        return D
+                #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
+                #sort -r | head -n${nrecent:-20}
+    except Exception as e:
+        raise
+        raise RuntimeError("PROBLEM listing GRBs:", e)
+
     
 
 @st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
@@ -130,24 +150,22 @@ def load_grb_list():
     try:
         import odakb
         D = odakb.sparql.select(
-            '?paper paper:mentions_named_grb ?name; ?p ?o', 
-            '?paper ?p ?o',
-            tojdict=True,
+            '?paper paper:mentions_named_grb ?name; paper:grb_isot ?isot', 
+            #'?name ?isot ?paper',
+            #tojdict=True,
             limit=30000)
+
         return {
-                    d['paper:mentions_named_grb'][0]: {
-                        'isot': d['paper:grb_isot'][0],
-                        'papers': [
-                            _d for _k, _d in D.items() if _d['paper:mentions_named_grb'][0] == d['paper:mentions_named_grb'][0]
-                        ]
+                    d['name']: {
+                        'isot': d['isot'],
                     }
-                for k, d in D.items() if 'paper:grb_isot' in d}
+                for d in D}
                 #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
                 #sort -r | head -n${nrecent:-20}
     except Exception as e:
+#        raise
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
-import integralclient as ic
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_integral_time(t0):
@@ -311,6 +329,7 @@ else:
             kg_grb_list = load_grb_list()
             st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
         except Exception as e:
+            raise
             st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
             kg_grb_list = {}
 
@@ -331,7 +350,11 @@ else:
     chosen_event = st.sidebar.selectbox('Select Event', reversed(sorted(list(eventlist.keys()))))
     
     t0 = eventlist[chosen_event]
-    
+
+    grb_papers = load_grb_papers(chosen_event)
+
+    #st.write(str(grb_papers))
+
     st.subheader(chosen_event)
     st.write('T$_0$:', t0)
 
@@ -341,7 +364,7 @@ else:
 
         keys = ['paper:DATE', 'paper:NUMBER', 'paper:SUBJECT']
         
-        for paper in sorted(D['papers'], key=lambda x: x['paper:DATE'][0]):
+        for paper in sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0]):
             cols = st.beta_columns(3)
             #cols[0].write(paper.keys())
             cols[0].write(f"[{paper['paper:NUMBER'][0]}]({paper['paper:location'][0]}) {paper['paper:DATE'][0]}")            
