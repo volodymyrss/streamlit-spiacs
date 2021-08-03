@@ -153,7 +153,7 @@ def load_grb_list():
             '?paper paper:mentions_named_grb ?name; paper:grb_isot ?isot', 
             #'?name ?isot ?paper',
             #tojdict=True,
-            limit=3000)
+            limit=50000)
 
         return {
                     d['name']: {
@@ -329,7 +329,7 @@ else:
             kg_grb_list = load_grb_list()
             st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
         except Exception as e:
-            raise
+            #raise
             st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
             kg_grb_list = {}
 
@@ -351,7 +351,10 @@ else:
     
     t0 = eventlist[chosen_event]
 
-    grb_papers = load_grb_papers(chosen_event)
+    try:
+        grb_papers = load_grb_papers(chosen_event)
+    except:
+        grb_papers = []
 
     #st.write(str(grb_papers))
 
