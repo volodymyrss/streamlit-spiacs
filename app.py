@@ -363,7 +363,7 @@ else:
     try:
         grb_papers = load_grb_papers(chosen_event)
     except:
-        grb_papers = []
+        grb_papers = {}
 
     #st.write(str(grb_papers))
 
