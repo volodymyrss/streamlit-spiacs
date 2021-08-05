@@ -143,7 +143,7 @@ def load_grb_papers(name):
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
     
-@st.cache(ttl=3600, max_entries=1, persist=True)   #-- Magic command to cache data
+@st.cache(ttl=60)   #-- Magic command to cache data
 def load_grb_list():
     try:
         import odakb
@@ -162,7 +162,7 @@ def load_grb_list():
             #tojdict=True,
             )
 
-        print(">>>>", D['results']['bindings'][0])
+        print("\033[31m>>>>", D['results']['bindings'][0], "\033[0m")
 
         return {
                     d['name']['value']: {
