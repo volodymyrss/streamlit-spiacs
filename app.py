@@ -409,7 +409,7 @@ t0_xtime = load_fermi_time(t0)
 integral_time = load_integral_time(t0)
 integral_sc = load_integral_sc(t0)
 
-integral_reports = """
+integral_reports = f"""
 * [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
 * [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
 """
