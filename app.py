@@ -21,6 +21,7 @@ from astropy.io import fits
 # thread-safe backend.
 # See https://matplotlib.org/3.3.2/faq/howto_faq.html#working-with-threads.
 import matplotlib as mpl
+from traitlets.traitlets import default
 mpl.use("agg")
 
 import logging
@@ -46,7 +47,7 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:", layout="wide")
 #detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('SPI-ACS, POLAR + ISGRI Quickview')
+st.title('INTEGRAL (SPI-ACS + ISGRI) and POLAR Data Quickview')
 
 st.markdown("""
  * Use the menu at left to select data and set plot parameters
@@ -56,6 +57,7 @@ st.markdown("""
 import oda_api.api
 
 from astropy.time import Time
+
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
@@ -142,6 +144,35 @@ def load_grb_papers(name):
     except Exception as e:
         raise RuntimeError("PROBLEM listing GRBs:", e)
 
+@st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
+def load_objects_of_interest():
+    try:
+        import odakb
+        D = odakb.sparql.select(
+            '''
+            ?object an:name ?object_name; 
+                    an:importantIn ?domain;
+                    ?p ?o .
+            ''',          
+            '?object ?p ?o',  
+            tojdict=True,
+            limit=100)        
+
+        print("D:", D)
+
+        return D
+                #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
+                #sort -r | head -n${nrecent:-20}
+    except Exception as e:
+        raise
+        raise RuntimeError("PROBLEM listing objects of interst:", e)
+
+objects_of_interest = load_objects_of_interest()
+
+# st.markdown(f"""
+# {objects_of_interest}
+# """)
+    
     
 @st.cache(ttl=60)   #-- Magic command to cache data
 def load_grb_list():
@@ -301,8 +332,6 @@ def load_ibis_veto(t0, dt_s):
     d = np.genfromtxt(io.StringIO(t), names=['ijd', 'time', 'rate', 'x'])
     return d
 
-st.sidebar.markdown("## Select Data Time")
-
 # -- Get list of events
 # find_datasets(catalog='GWTC-1-confident',type='events')
 # eventlist = datasets.find_datasets(type='events')
@@ -311,10 +340,58 @@ st.sidebar.markdown("## Select Data Time")
 # eventlist = list(eventset)
 # eventlist.sort()
 
+st.sidebar.markdown("# Select Astrophysical Source")
 
+use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
+use_kg_ooi = st.sidebar.checkbox('Load KG Objects of Interest of INTEGRAL QLA', value=True)
+
+if use_kg_grb:
+    try:
+        kg_grb_list = load_grb_list()
+        st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
+    except Exception as e:
+        raise
+        st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
+        kg_grb_list = {}
+
+else:
+    kg_grb_list = {}
+
+eventlist = {
+    "GRB170817A": '2017-08-17T12:41:00',
+    "GRB080319B": '2008-03-19T06:12:44',
+    "GRB120711A": "2012-07-11T02:45:30.0",
+    "GRB190114C": "2019-01-14T20:57:02.38",
+    #**load_grb_list()
+    **{k: d['isot'] for k, d in kg_grb_list.items()}
+}
+    
+source_list = list(eventlist.keys())
+
+if use_kg_ooi:
+    source_list += list([v['an:name'][0] for k, v in objects_of_interest.items()])
+
+url_source_names = st.experimental_get_query_params().get('source_name', [])
+
+if url_source_names == []:
+    url_source_name = None
+else:
+    url_source_name = url_source_names[0]
+
+if st.sidebar.selectbox('Custom name or known to us?',
+                                    ['Custom', 'Known']) == 'Known':                                    
+    #use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
+    source_name = st.sidebar.selectbox('Select Source', reversed(sorted(source_list + url_source_names)))
+    st.experimental_set_query_params(source_name=source_name)
+else:
+    source_name = st.sidebar.text_input('Select Source', url_source_name)
+    
+
+
+st.sidebar.markdown("## Select Observation Time")
 
 #-- Set time by GPS or event
-select_event = st.sidebar.selectbox('How do you want to find data?',
+select_event = st.sidebar.selectbox('How do you want to select time frame?',
                                     ['By event name', 'By UTC'])
 
 
@@ -335,44 +412,17 @@ if select_event == 'By UTC':
 else:
     #t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
 
-    use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
-
-    if use_kg_grb:
-        try:
-            kg_grb_list = load_grb_list()
-            st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
-        except Exception as e:
-            raise
-            st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
-            kg_grb_list = {}
-
-    else:
-        kg_grb_list = {}
-
-    eventlist = {
-        "GRB170817A": '2017-08-17T12:41:00',
-        "GRB080319B": '2008-03-19T06:12:44',
-        "GRB120711A": "2012-07-11T02:45:30.0",
-        "GRB190114C": "2019-01-14T20:57:02.38",
-        #**load_grb_list()
-        **{k: d['isot'] for k, d in kg_grb_list.items()}
-    }
-
-
     
-    chosen_event = st.sidebar.selectbox('Select Event', reversed(sorted(list(eventlist.keys()))))
-    
-    t0 = eventlist[chosen_event]
+    t0 = eventlist.get(source_name, None)
 
     try:
-        grb_papers = load_grb_papers(chosen_event)
+        grb_papers = load_grb_papers(source_name)
     except:
         grb_papers = {}
 
     #st.write(str(grb_papers))
 
-    st.subheader(chosen_event)
-    st.write('T$_0$:', t0)
+    st.subheader(source_name)
 
     if kg_grb_list != {}:
         #D = kg_grb_list.get(chosen_event)
@@ -391,35 +441,42 @@ else:
         #     cols[1].write(v[0])
 
 #        st.dataframe(pd.DataFrame(dicts))
+
+if t0 is None:
+    t0 = ":".join(Time.now().isot.split(":")[:-2] + ["00","00"])
     
+st.write('T$_0$:', t0)
         
-use_gbm = st.sidebar.checkbox('Load GBM')
+#use_gbm = st.sidebar.checkbox('Load GBM')
+use_gbm = False
 
     
 #-- Choose detector as H1, L1, or V1
 #detector = st.sidebar.selectbox('Detector', detectorlist)
 
-# -- Create sidebar for plot controls
-st.sidebar.markdown('## Set Plot Parameters')
-dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 50.0)  # min, max, default
+if t0 is not None:
+    st.sidebar.markdown('## Set Plot Parameters')
+    dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 50.0)  # min, max, default
 
-dt_rebin = st.sidebar.slider('Rebinning time scale (seconds)', max(0.1, dtboth/100), min(100.0, dtboth/10), dtboth/30)  # min, max, default
+    dt_rebin = st.sidebar.slider('Rebinning time scale (seconds)', max(0.1, dtboth/100), min(100.0, dtboth/10), dtboth/30)  # min, max, default
 
-isgri_e1 = st.sidebar.slider('ISGRI E_MIN (keV)', 15, 800, 25)
-isgri_e2 = st.sidebar.slider('ISGRI E_MAX (keV)', isgri_e1, 800, isgri_e1 + 100)
+    isgri_e1 = st.sidebar.slider('ISGRI E_MIN (keV)', 15, 800, 25)
+    isgri_e2 = st.sidebar.slider('ISGRI E_MAX (keV)', isgri_e1, 800, isgri_e1 + 100)
 
+scope_d = st.sidebar.slider('Exploration scope (days)', 0.1, 100.0, 20.0)  # min, max, default
+
+
+st.sidebar.markdown("## Select Sky Location")
 
 select_loc = st.sidebar.selectbox('Sky Location',
-                                    ['By name', 'RA Dec'])
+                                ['By name', 'RA and Dec'])
 
-scope_d = st.sidebar.slider('Exploration scope (days)', 0.1, 100.0, 50.0)  # min, max, default
 
 from astropy import coordinates as coords
 from astroquery.simbad import Simbad
 
-if select_loc == "By name":
-    source_name = st.sidebar.text_input('Source Name', 'Crab').strip()  
 
+if select_loc == "By name":
     try:
         t = Simbad.query_object(source_name)
     except Exception as e:
@@ -436,16 +493,17 @@ if select_loc == "By name":
 
 #    st.markdown("source:" + str(source_coord))
 else:
-    source_coords = coords.SkyCoord(
-        st.sidebar.text_input('RA', '').strip(),
-        st.sidebar.text_input('Dec', '').strip(),
+    source_coord = coords.SkyCoord(
+        st.sidebar.text_input('RA', '83').strip(),
+        st.sidebar.text_input('Dec', '22').strip(),
+        unit="deg"
     )
 
+if t0 is not None:
+    dt_s = dtboth / 2.0
+    dt_s_download = (int(dt_s/100)+1)*100
 
-dt_s = dtboth / 2.0
-dt_s_download = (int(dt_s/100)+1)*100
-
-t0_xtime = load_fermi_time(t0)
+    t0_xtime = load_fermi_time(t0)
 
 # st.markdown(f"""
 # {t0_xtime}
@@ -460,9 +518,8 @@ else:
 
 
 
-
 st.markdown(f"""
-## INTEGRAL context
+## INTEGRAL spacecraft at selected time
 ***
 """)
 
@@ -495,9 +552,6 @@ st.markdown(f"""
 """)
 
 
-# st.markdown(f"""
-# ## POLAR context
-# """)
 
 @st.cache(ttl=360000, max_entries=100, persist=True)
 def load_integral_observations(t0, scope_d, ra, dec):
@@ -752,7 +806,7 @@ with col1:
     else:
         st.markdown("IBIS Veto data could not be retrieved!")
         with st.beta_expander("See notes"):
-            st.markdown("Please consult the operations reports:\n" + integral_reports)
+            st.markdown("Please consult the operations reports above\n")
 
 
 
