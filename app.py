@@ -220,9 +220,12 @@ def load_fermi_time(t0):
     return queryxtime(time_in_i=t0)
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
-def load_integral_sc(t0):
+def load_integral_sc(t0, ra_deg, dec_deg):
     _t0 = Time(t0, format="isot")
-    d = ic.get_sc(_t0.isot)
+    if ra_deg is None or dec_deg is None:
+        d = ic.get_sc(_t0.isot)
+    else:
+        d = ic.get_sc(_t0.isot, ra=ra_deg, dec=dec_deg)
     return d
 
 
@@ -315,6 +318,7 @@ select_event = st.sidebar.selectbox('How do you want to find data?',
                                     ['By event name', 'By UTC'])
 
 
+
 if select_event == 'By UTC':
     # -- Set a GPS time:        
     t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
@@ -371,11 +375,11 @@ else:
     st.write('T$_0$:', t0)
 
     if kg_grb_list != {}:
-        D = kg_grb_list[chosen_event]
+        #D = kg_grb_list.get(chosen_event)
         
                 
         
-        for paper in sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0]):
+        for paper in reversed(sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0])):
             cols = st.beta_columns(3)
             #cols[0].write(paper.keys())
             cols[0].write(f"[{paper['paper:NUMBER'][0]}]({paper['paper:location'][0]}) {paper['paper:DATE'][0]}")            
@@ -398,7 +402,44 @@ use_gbm = st.sidebar.checkbox('Load GBM')
 # -- Create sidebar for plot controls
 st.sidebar.markdown('## Set Plot Parameters')
 dtboth = st.sidebar.slider('Time Range (seconds)', 0.5, 1000.0, 50.0)  # min, max, default
+
+dt_rebin = st.sidebar.slider('Rebinning time scale (seconds)', max(0.1, dtboth/100), min(100.0, dtboth/10), dtboth/30)  # min, max, default
+
+isgri_e1 = st.sidebar.slider('ISGRI E_MIN (keV)', 15, 800, 25)
+isgri_e2 = st.sidebar.slider('ISGRI E_MAX (keV)', isgri_e1, 800, isgri_e1 + 100)
+
+
+select_loc = st.sidebar.selectbox('Sky Location',
+                                    ['By name', 'RA Dec'])
+
+scope_d = st.sidebar.slider('Exploration scope (days)', 0.1, 100.0, 50.0)  # min, max, default
+
+from astropy import coordinates as coords
+from astroquery.simbad import Simbad
+
+if select_loc == "By name":
+    source_name = st.sidebar.text_input('Source Name', '').strip()  
+    t = Simbad.query_object(source_name)
+
+    if t is None:
+        source_coord = None
+    else:
+        source_coord = coords.SkyCoord(
+            t['RA'][0],
+            t['DEC'][0],
+            unit=("hourangle", "deg")
+        )
+
+#    st.markdown("source:" + str(source_coord))
+else:
+    source_coords = coords.SkyCoord(
+        st.sidebar.text_input('RA', '').strip(),
+        st.sidebar.text_input('Dec', '').strip(),
+    )
+
+
 dt_s = dtboth / 2.0
+dt_s_download = (int(dt_s/100)+1)*100
 
 t0_xtime = load_fermi_time(t0)
 
@@ -407,37 +448,93 @@ t0_xtime = load_fermi_time(t0)
 # """)
 
 integral_time = load_integral_time(t0)
-integral_sc = load_integral_sc(t0)
 
-integral_reports = f"""
-* [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
-* [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
-"""
+if source_coord is None:
+    integral_sc = load_integral_sc(t0, None, None)
+else:
+    integral_sc = load_integral_sc(t0, source_coord.ra.deg, source_coord.dec.deg)
+
+
 
 
 st.markdown(f"""
-
 ## INTEGRAL context
+***
+""")
 
-INTEGRAL ScW: {integral_time['SCWID']}
+col1, col2, col3 = st.beta_columns(3)
 
-{integral_sc['bodies']['earth']['separation']} km from Earth
-Pointing to RA={integral_sc['scx']['ra']}, Dec={integral_sc['scx']['dec']}
+with col1:
+    st.markdown(f"""
+    INTEGRAL ScW: {integral_time['SCWID']}
 
-""" + integral_reports)
+    {integral_sc['bodies']['earth']['separation']} km from Earth
+    Pointing to RA={integral_sc['scx']['ra']}, Dec={integral_sc['scx']['dec']}
+
+    """)    
+with col2:
+    st.markdown(f"""
+    * [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
+    * [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
+    """
+    )
+with col3:
+    if source_coord is not None:
+        st.markdown(f"""    
+        With respect to source RA={source_coord.ra.deg:.3f},  DEC={source_coord.dec.deg:.3f}
+
+        off-axis angle:{integral_sc['theta']:.3f}, phi={integral_sc['phi']:.3f}
+        """)
+
+st.markdown(f"""
+***
+""")
 
 
 # st.markdown(f"""
 # ## POLAR context
 # """)
 
+@st.cache(ttl=360000, max_entries=100, persist=True)
+def load_integral_observations(t0, scope_d, ra, dec):
+    T = Time(t0, format='isot')
+    t1 = Time(T.mjd - scope_d, format="mjd").isot[:10]
+    t2 = Time(T.mjd + scope_d, format="mjd").isot[:10]
+
+
+    scwlist = requests.get(f"https://www.astro.unige.ch/cdci/astrooda/dispatch-data/gw/timesystem/api/v1.0/scwlist/any/{t1}/{t2}?&ra={ra}&dec={dec}&radius=1005&min_good_isgri=1000&return_columns=SWID,RA_SCX,DEC_SCX,TSTART").json()
+    return scwlist
+
+if source_coord is not None:
+    integral_observations = load_integral_observations(t0, scope_d, source_coord.ra.deg, source_coord.dec.deg)
+
+
+if source_coord is not None:
+    with _lock:
+        from matplotlib import pylab as plt
+        import numpy as np
+        from astropy.coordinates import SkyCoord
+
+        fig = plt.figure(figsize=(15,5))
+
+        C = SkyCoord(integral_observations['RA_SCX'], integral_observations['DEC_SCX'], unit='deg').separation(source_coord)
+        plt.xlabel("")
+
+        plt.scatter((np.array(integral_observations['TSTART']) - float(integral_time['IJD'])), C.deg)
+        plt.axhspan(9, 15, alpha=0.1, color='y')
+        plt.axhspan(0, 9, alpha=0.1, color='g')
+
+        plt.xlabel(f"days since {t0}")
+        st.pyplot(fig, clear_figure=True)
+
+
 try:
-    ibis_veto_lc = load_ibis_veto(t0, dt_s)
+    ibis_veto_lc = load_ibis_veto(t0, dt_s_download)
 except Exception as e:
     ibis_veto_lc = None
 
 try:
-    isgri_events = deepcopy(load_isgri(t0, dt_s).copy())
+    isgri_events = deepcopy(load_isgri(t0, dt_s_download).copy())
 except:
     isgri_events = None
 #isgri_image = load_isgri_image(t0).copy()
@@ -464,7 +561,7 @@ except Exception as e:
 #-- Create a text element and let the reader know the data is loading.
 strain_load_state = st.text('Loading data...this may take a minute')
 try:
-    lc = load_lc(t0, dt_s)
+    lc = load_lc(t0, dt_s_download)
 except Exception as e:
     st.text('Data load failed.  Try a different time and detector pair.')
     st.text('Problems can be reported to gwosc@igwn.org')
@@ -513,69 +610,72 @@ def rebin(S, n, offs=0, mean=True):
         return S.reshape(N, n).sum(1)
 
 
+col1, col2 = st.beta_columns(2)
 
-with _lock:
-    if lc is None:
-        st.markdown("No SPI-ACS data could be retrieved! In the future, we will detect here if it's normal.")
-    else:
-        # fig1 = lc.crop(cropstart, cropend).plot()
-        fig1 = plt.figure(figsize=(12,4))
-
-        x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="")
-        plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color())
-
-        for rebin_n in [20,]:
-            t = rebin(lc['TIME'], rebin_n)
-            r = rebin(lc['RATE'], rebin_n)
-            re = rebin(lc['ERROR'] * 20**0.5, rebin_n)
-
-            x = plt.errorbar(t, r, re, ls="")
-            plt.step(t, r, where='mid', c=x[0].get_color())
-    
-
-        #fig1 = cropped.plot()
-
-        plt.title("INTEGRAL/SPI-ACS")
-        plt.ylabel("counts/s")
-        plt.xlabel(f"seconds since {t0}")
-        plt.xlim([-dt_s, dt_s])
-
-        st.pyplot(fig1, clear_figure=True)
-
-with st.beta_expander("See notes"):
-    st.markdown(f"""
-Total SPI-ACS rate, 100ms bins. Sensitive to whole sky, but less sensitive to directions around spacecraft pointing direction and especially the direction opposite to it. See above for the direction.
-""")
-
-if polar_lc is not None:
+with col1:
     with _lock:
-        polar_lc = np.array(polar_lc)
-        #print("polar_lc", polar_lc)
-        print("polar_lc", polar_lc.shape)
-        print("polar_lc", np.array(polar_lc[0]).dtype)
+        if lc is None:
+            st.markdown("No SPI-ACS data could be retrieved! In the future, we will detect here if it's normal.")
+        else:
+            # fig1 = lc.crop(cropstart, cropend).plot()
+            fig1 = plt.figure(figsize=(12,4))
 
-        polar_lc = np.stack(polar_lc)
+            x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="", alpha=0.8)
+            plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color(), alpha=0.8)
 
-        # fig1 = lc.crop(cropstart, cropend).plot()
-        fig2 = plt.figure(figsize=(12,4))
+            for rebin_n in [int(dt_rebin/0.05), ]:
+                t = rebin(lc['TIME'], rebin_n)
+                r = rebin(lc['RATE'], rebin_n)
+                re = rebin(lc['ERROR']**2 , rebin_n)**0.5
 
-        t = Time(polar_lc['time'], format="unix").unix - Time(t0, format="isot").unix
+                x = plt.errorbar(t, r, re, ls="", lw=3)
+                plt.step(t, r, where='mid', c=x[0].get_color(), lw=3)
+        
 
-        plt.title("POLAR")
+            #fig1 = cropped.plot()
 
-        x = plt.errorbar( t, polar_lc['rate'], polar_lc['rate_err'], ls="")
-        plt.ylabel("counts/s")
-        plt.step( t, polar_lc['rate'], where='mid', c=x[0].get_color())
-        #fig1 = cropped.plot()
+            plt.title("INTEGRAL/SPI-ACS")
+            plt.ylabel("counts/s")
+            plt.xlabel(f"seconds since {t0}")
+            plt.xlim([-dt_s, dt_s])
 
-        #fig1 = cropped.plot()
+            st.pyplot(fig1, clear_figure=True)
 
-        plt.xlabel(f"seconds since {t0}")
-        plt.xlim([-dt_s, dt_s])
+    with st.beta_expander("See notes"):
+        st.markdown(f"""
+    Total SPI-ACS rate, 100ms bins. Sensitive to whole sky, but less sensitive to directions around spacecraft pointing direction and especially the direction opposite to it. See above for the direction.
+    """)
 
-        st.pyplot(fig2, clear_figure=True)
-else:
-    st.markdown("POLAR data could not be retrieved! Is it out of the missin span?")
+with col2:
+    if polar_lc is not None:
+        with _lock:
+            polar_lc = np.array(polar_lc)
+            #print("polar_lc", polar_lc)
+            print("polar_lc", polar_lc.shape)
+            print("polar_lc", np.array(polar_lc[0]).dtype)
+
+            polar_lc = np.stack(polar_lc)
+
+            # fig1 = lc.crop(cropstart, cropend).plot()
+            fig2 = plt.figure(figsize=(12,4))
+
+            t = Time(polar_lc['time'], format="unix").unix - Time(t0, format="isot").unix
+
+            plt.title("POLAR")
+
+            x = plt.errorbar( t, polar_lc['rate'], polar_lc['rate_err'], ls="")
+            plt.ylabel("counts/s")
+            plt.step( t, polar_lc['rate'], where='mid', c=x[0].get_color())
+            #fig1 = cropped.plot()
+
+            #fig1 = cropped.plot()
+
+            plt.xlabel(f"seconds since {t0}")
+            plt.xlim([-dt_s, dt_s])
+
+            st.pyplot(fig2, clear_figure=True)
+    else:
+        st.markdown("POLAR data could not be retrieved! Is it out of the mission span?")
 
 import gzip
 
@@ -617,37 +717,37 @@ if use_gbm:
         gbm = None
 
 
+with col1:
+    if ibis_veto_lc is not None:
+        with _lock:
+            polar_lc = np.array(polar_lc)
+            
+            # fig1 = lc.crop(cropstart, cropend).plot()
+            fig3 = plt.figure(figsize=(12,4))
 
-if ibis_veto_lc is not None:
-    with _lock:
-        polar_lc = np.array(polar_lc)
-        
-        # fig1 = lc.crop(cropstart, cropend).plot()
-        fig3 = plt.figure(figsize=(12,4))
+            t = ibis_veto_lc['time'] - dt_s
 
-        t = ibis_veto_lc['time'] - dt_s
+            plt.title("IBIS/Veto")
 
-        plt.title("IBIS/Veto")
+            x = plt.errorbar( t, ibis_veto_lc['rate'], ibis_veto_lc['rate']**0.5/8, ls="")
 
-        x = plt.errorbar( t, ibis_veto_lc['rate'], ibis_veto_lc['rate']**0.5/8, ls="")
+            plt.ylabel("counts/s")
+            plt.step( t, ibis_veto_lc['rate'], where='mid', c=x[0].get_color())
+            
+            plt.xlabel(f"seconds since {t0}")
+            plt.xlim([-dt_s, dt_s])
 
-        plt.ylabel("counts/s")
-        plt.step( t, ibis_veto_lc['rate'], where='mid', c=x[0].get_color())
-        
-        plt.xlabel(f"seconds since {t0}")
-        plt.xlim([-dt_s, dt_s])
+            st.pyplot(fig3, clear_figure=True)
 
-        st.pyplot(fig3, clear_figure=True)
-
-    with st.beta_expander("See notes"):
-        st.markdown(f"""
-    Total IBIS Veto rate, 8s bins. Sensitive primarily to directions opposite to the spacecraft pointing direction. See above for the direction.
-    Note that this rate also contains periodic high bins, encoding different kind  of data. They should not be mistook for GRBs.
-    """)
-else:
-    st.markdown("IBIS Veto data could not be retrieved!")
-    with st.beta_expander("See notes"):
-        st.markdown("Please consult the operations reports:\n" + integral_reports)
+        with st.beta_expander("See notes"):
+            st.markdown(f"""
+        Total IBIS Veto rate, 8s bins. Sensitive primarily to directions opposite to the spacecraft pointing direction. See above for the direction.
+        Note that this rate also contains periodic high bins, encoding different kind  of data. They should not be mistook for GRBs.
+        """)
+    else:
+        st.markdown("IBIS Veto data could not be retrieved!")
+        with st.beta_expander("See notes"):
+            st.markdown("Please consult the operations reports:\n" + integral_reports)
 
 
 
@@ -655,33 +755,36 @@ else:
 #center = int(t0)
 #lc = deepcopy(lc)
 
+with col2:
+    if isgri_events is not None:
+        with _lock:
+            # fig1 = lc.crop(cropstart, cropend).plot()
+            fig2 = plt.figure(figsize=(12,4))
 
-if isgri_events is not None:
-    with _lock:
-        # fig1 = lc.crop(cropstart, cropend).plot()
-        fig2 = plt.figure(figsize=(12,4))
-        h = np.histogram((isgri_events['TIME'] - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 300))
+            t_ijd = isgri_events['TIME'][(isgri_events['ISGRI_ENERGY']>isgri_e1) & (isgri_events['ISGRI_ENERGY']<isgri_e2)]
 
-        plt.step(
-            (h[1][1:] + h[1][:-1]), 
-            h[0]/(h[1][1:] - h[1][:-1]))
-        #fig1 = cropped.plot()
+            h = np.histogram((t_ijd - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 300))
 
-        plt.xlabel(f"seconds since {t0}")
-        plt.ylabel("counts / s (full energy range)")
-        plt.title("ISGRI total rate")
-        plt.xlim([-dt_s, dt_s])
+            plt.step(
+                (h[1][1:] + h[1][:-1]), 
+                h[0]/(h[1][1:] - h[1][:-1]))
+            #fig1 = cropped.plot()
 
-        st.pyplot(fig2, clear_figure=True)
+            plt.xlabel(f"seconds since {t0}")
+            plt.ylabel("counts / s (full energy range)")
+            plt.title("ISGRI total rate")
+            plt.xlim([-dt_s, dt_s])
 
-    with st.beta_expander("See notes"):
-        st.markdown(f"""
-    Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
-    """)
-else:
-    st.markdown("ISGRI data could not be retrieved!")
-    with st.beta_expander("See notes"):
-        st.markdown("Please consult the operations reports:\n" + integral_reports)
+            st.pyplot(fig2, clear_figure=True)
+
+        with st.beta_expander("See notes"):
+            st.markdown(f"""
+        Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
+        """)
+    else:
+        st.markdown("ISGRI data could not be retrieved!")
+        with st.beta_expander("See notes"):
+            st.markdown("Please consult the operations reports above\n" )
 
 
 if use_gbm and gbm is not None:
