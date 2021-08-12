@@ -390,15 +390,27 @@ else:
 
 st.sidebar.markdown("## Select Observation Time")
 
-#-- Set time by GPS or event
-select_event = st.sidebar.selectbox('How do you want to select time frame?',
-                                    ['By event name', 'By UTC'])
+query_t0_utc = st.experimental_get_query_params().get('t0_utc', [])
 
+if query_t0_utc != []:
+    query_t0_utc = query_t0_utc[0]
+
+    #-- Set time by GPS or event
+    select_event = st.sidebar.selectbox('How do you want to select time frame?',
+                                        ['By UTC', 'By event name'])
+else:
+    select_event = st.sidebar.selectbox('How do you want to select time frame?',
+                                        ['By event name', 'By UTC'])
 
 
 if select_event == 'By UTC':
     # -- Set a GPS time:        
-    t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
+
+    if query_t0_utc != []:
+        t0 = st.sidebar.text_input('UTC', query_t0_utc).strip()    # -- GW150914
+    else:
+        t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
+    #st.experimental_set_query_params(t0_utc=t0, source_name=source_name)
     #t0 = float(str_t0)
 
     # st.sidebar.markdown("""
