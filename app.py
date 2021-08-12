@@ -418,8 +418,12 @@ from astropy import coordinates as coords
 from astroquery.simbad import Simbad
 
 if select_loc == "By name":
-    source_name = st.sidebar.text_input('Source Name', '').strip()  
-    t = Simbad.query_object(source_name)
+    source_name = st.sidebar.text_input('Source Name', 'Crab').strip()  
+
+    try:
+        t = Simbad.query_object(source_name)
+    except Exception as e:
+        t = None
 
     if t is None:
         source_coord = None
@@ -515,7 +519,7 @@ if source_coord is not None:
         import numpy as np
         from astropy.coordinates import SkyCoord
 
-        fig = plt.figure(figsize=(15,5))
+        fig = plt.figure(figsize=(15,3))
 
         C = SkyCoord(integral_observations['RA_SCX'], integral_observations['DEC_SCX'], unit='deg').separation(source_coord)
         plt.xlabel("")
@@ -524,6 +528,7 @@ if source_coord is not None:
         plt.axhspan(9, 15, alpha=0.1, color='y')
         plt.axhspan(0, 9, alpha=0.1, color='g')
 
+        plt.title(f"off-axis angle for {source_coord} - might not be the GRB at T$_0$!")
         plt.xlabel(f"days since {t0}")
         st.pyplot(fig, clear_figure=True)
 
