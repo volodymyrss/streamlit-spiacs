@@ -442,7 +442,7 @@ else:
                 
         
         for paper in reversed(sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0])):
-            cols = st.beta_columns(3)
+            cols = st.columns(3)
             #cols[0].write(paper.keys())
             cols[0].write(f"[{paper['paper:NUMBER'][0]}]({paper['paper:location'][0]}) {paper['paper:DATE'][0]}")            
             cols[1].write(paper['paper:title'][0])
@@ -535,7 +535,7 @@ st.markdown(f"""
 ***
 """)
 
-col1, col2, col3 = st.beta_columns(3)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown(f"""
@@ -681,7 +681,7 @@ def rebin(S, n, offs=0, mean=True):
         return S.reshape(N, n).sum(1)
 
 
-col1, col2 = st.beta_columns(2)
+col1, col2 = st.columns(2)
 
 with col1:
     with _lock:
@@ -712,7 +712,7 @@ with col1:
 
             st.pyplot(fig1, clear_figure=True)
 
-    with st.beta_expander("See notes"):
+    with st.expander("See notes"):
         st.markdown(f"""
     Total SPI-ACS rate, 100ms bins. Sensitive to whole sky, but less sensitive to directions around spacecraft pointing direction and especially the direction opposite to it. See above for the direction.
     """)
@@ -810,14 +810,14 @@ with col1:
 
             st.pyplot(fig3, clear_figure=True)
 
-        with st.beta_expander("See notes"):
+        with st.expander("See notes"):
             st.markdown(f"""
         Total IBIS Veto rate, 8s bins. Sensitive primarily to directions opposite to the spacecraft pointing direction. See above for the direction.
         Note that this rate also contains periodic high bins, encoding different kind  of data. They should not be mistook for GRBs.
         """)
     else:
         st.markdown("IBIS Veto data could not be retrieved!")
-        with st.beta_expander("See notes"):
+        with st.expander("See notes"):
             st.markdown("Please consult the operations reports above\n")
 
 
@@ -848,13 +848,13 @@ with col2:
 
             st.pyplot(fig2, clear_figure=True)
 
-        with st.beta_expander("See notes"):
+        with st.expander("See notes"):
             st.markdown(f"""
         Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
         """)
     else:
         st.markdown("ISGRI data could not be retrieved!")
-        with st.beta_expander("See notes"):
+        with st.expander("See notes"):
             st.markdown("Please consult the operations reports above\n" )
 
 
@@ -884,7 +884,7 @@ if use_gbm and gbm is not None:
 
         st.pyplot(fig2, clear_figure=True)
 
-    with st.beta_expander("See notes"):
+    with st.expander("See notes"):
         st.markdown(f"""
     Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
     """)
