@@ -61,7 +61,7 @@ from astropy.time import Time
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
-def load_lc(t0, dt_s):
+def load_spiacs_lc(t0, dt_s):
     _t0 = Time(t0, format="isot")
 
     disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
@@ -378,10 +378,24 @@ if url_source_names == []:
 else:
     url_source_name = url_source_names[0]
 
-if st.sidebar.selectbox('Custom name or known to us?',
-                                    ['Custom', 'Known']) == 'Known':                                    
-    #use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
-    source_name = st.sidebar.selectbox('Select Source', reversed(sorted(source_list + url_source_names)))
+source_list += url_source_names
+
+def sort_key(n):
+    if n.startswith('GRB'):
+        return "z" + n
+    return n
+
+source_list = list(reversed(sorted(set(source_list), key=sort_key)))
+
+if url_source_name is not None:
+    custom_source = st.sidebar.selectbox('Custom name or known to us?', ['Custom', 'Known']) == 'Custom'
+else:
+    custom_source = st.sidebar.selectbox('Custom name or known to us?', ['Known', 'Custom']) == 'Custom'
+                                    
+if not custom_source:
+    #use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)    
+
+    source_name = st.sidebar.selectbox('Select Source', source_list)
     st.experimental_set_query_params(source_name=source_name)
 else:
     source_name = st.sidebar.text_input('Select Source', url_source_name)
@@ -632,10 +646,10 @@ except Exception as e:
 #-- Create a text element and let the reader know the data is loading.
 strain_load_state = st.text('Loading data...this may take a minute')
 try:
-    lc = load_lc(t0, dt_s_download)
+    lc = load_spiacs_lc(t0, dt_s_download)
 except Exception as e:
+    raise
     st.text('Data load failed.  Try a different time and detector pair.')
-    st.text('Problems can be reported to gwosc@igwn.org')
     raise st.script_runner.StopException
 
 
@@ -788,7 +802,7 @@ if use_gbm:
         gbm = None
 
 
-with col1:
+with col2:
     if ibis_veto_lc is not None:
         with _lock:
             polar_lc = np.array(polar_lc)
@@ -826,7 +840,7 @@ with col1:
 #center = int(t0)
 #lc = deepcopy(lc)
 
-with col2:
+with col1:
     if isgri_events is not None:
         with _lock:
             # fig1 = lc.crop(cropstart, cropend).plot()
