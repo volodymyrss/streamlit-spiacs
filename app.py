@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import time
+
 import requests, os
 
 from copy import deepcopy
@@ -88,6 +90,7 @@ def load_spiacs_lc(t0, dt_s):
         return
 
     return lc
+
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
@@ -396,11 +399,10 @@ if not custom_source:
     #use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)    
 
     source_name = st.sidebar.selectbox('Select Source', source_list)
-    st.experimental_set_query_params(source_name=source_name)
+    #st.experimental_set_query_params(source_name=source_name)
 else:
     source_name = st.sidebar.text_input('Select Source', url_source_name)
     
-
 
 st.sidebar.markdown("## Select Observation Time")
 
@@ -468,15 +470,65 @@ else:
 
 #        st.dataframe(pd.DataFrame(dicts))
 
+class Secret(object):
+    @property
+    def secret_location(self):
+        if 'CDCI_SECRET_LOCATION' in os.environ:
+            return os.environ['CDCI_SECRET_LOCATION']
+        else:
+            return os.environ['HOME']+"/.secret-cdci"
+
+    def get_auth(self):
+        username="cdci" # keep separate from secrect to cause extra confusion!
+        password=os.environ.get("CDCI_SECRET",None)
+        if password is None:
+            password = open(self.secret_location).read()
+        password=password.strip()
+        return requests.auth.HTTPBasicAuth(username, password)
+
+auth=Secret().get_auth()
+
 if t0 is None:
     t0 = ":".join(Time.now().isot.split(":")[:-2] + ["00","00"])
-    
-st.write('T$_0$:', t0)
+
+from load_css import local_css
+
+local_css("style.css")
+ 
+st.write(f"<span class='highlight blue'>T<sub>{0}</sub> = {t0}</span>", unsafe_allow_html=True)
         
 #use_gbm = st.sidebar.checkbox('Load GBM')
 use_gbm = False
 
-    
+
+use_ias = st.sidebar.checkbox('Load All Sky Rate Search')    
+
+if use_ias:
+    @st.cache(ttl=60, max_entries=10, persist=False)   #-- Magic command to cache data
+    def load_integral_all_sky(t0):
+        url = f"https://oda-workflows-integral-all-sky.odahub.io/api/v1.0/get/integralallsky?t0_utc={t0}&_async_request=yes"
+        r = requests.get(url, auth=auth)    
+        return r.json()
+
+
+    integral_all_sky = load_integral_all_sky(t0)
+
+    json.dump(integral_all_sky, open("ias.json", "w"))
+
+    st.markdown(integral_all_sky['workflow_status'])
+
+    if integral_all_sky['workflow_status'] == "done":
+        st.markdown(integral_all_sky.keys())
+
+        import base64
+
+        st.image(base64.b64decode(integral_all_sky['data']['output']['acs_lc_png_content']))
+
+        st.image(base64.b64decode(integral_all_sky['data']['output']['excesses_mosaic_png_content']))
+
+        
+
+
 #-- Choose detector as H1, L1, or V1
 #detector = st.sidebar.selectbox('Detector', detectorlist)
 
@@ -964,3 +1016,36 @@ This app displays data from INTEGRAL and POLAR, downloaded from https://www.astr
 
 """)
 
+
+@st.cache(ttl=1000, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_igcn(t0, ra, dec, name):
+    url = f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&event_kind=UNKNOWN&test=0&_async_request=yes"
+    #st.markdown(url)
+    r = requests.get(url, auth=auth)    
+
+    try:
+        return r.json()
+    except:
+        return r.text, url
+
+
+if source_coord is not None:
+    if st.sidebar.checkbox('Load INTEGRAL GCN'):
+        igcn = load_igcn(t0, source_coord.ra.deg, source_coord.dec.deg, source_name)
+
+        json.dump(igcn, open("igcn.json", "w"))
+
+        try:
+            st.markdown(igcn['workflow_status'])
+        except:
+            st.markdown(f"{igcn[0]} {igcn[1]}")
+
+
+        if igcn['workflow_status'] == "done":
+            st.markdown(igcn.keys())
+
+            import base64
+
+            st.image(base64.b64decode(igcn['data']['output']['acs_lc_png_content']))
+
+            st.image(base64.b64decode(igcn['data']['output']['excesses_mosaic_png_content']))
