@@ -486,7 +486,10 @@ class Secret(object):
         password=password.strip()
         return requests.auth.HTTPBasicAuth(username, password)
 
-auth=Secret().get_auth()
+try:
+    auth=Secret().get_auth()
+except:
+    auth=None
 
 if t0 is None:
     t0 = ":".join(Time.now().isot.split(":")[:-2] + ["00","00"])
@@ -501,30 +504,31 @@ st.write(f"<span class='highlight blue'>T<sub>{0}</sub> = {t0}</span>", unsafe_a
 use_gbm = False
 
 
-use_ias = st.sidebar.checkbox('Load All Sky Rate Search')    
+if auth is not None:
+    use_ias = st.sidebar.checkbox('Load All Sky Rate Search')    
 
-if use_ias:
-    @st.cache(ttl=60, max_entries=10, persist=False)   #-- Magic command to cache data
-    def load_integral_all_sky(t0):
-        url = f"https://oda-workflows-integral-all-sky.odahub.io/api/v1.0/get/integralallsky?t0_utc={t0}&_async_request=yes"
-        r = requests.get(url, auth=auth)    
-        return r.json()
+    if use_ias:
+        @st.cache(ttl=60, max_entries=10, persist=False)   #-- Magic command to cache data
+        def load_integral_all_sky(t0):
+            url = f"https://oda-workflows-integral-all-sky.odahub.io/api/v1.0/get/integralallsky?t0_utc={t0}&_async_request=yes"
+            r = requests.get(url, auth=auth)    
+            return r.json()
 
 
-    integral_all_sky = load_integral_all_sky(t0)
+        integral_all_sky = load_integral_all_sky(t0)
 
-    json.dump(integral_all_sky, open("ias.json", "w"))
+        json.dump(integral_all_sky, open("ias.json", "w"))
 
-    st.markdown(integral_all_sky['workflow_status'])
+        st.markdown(integral_all_sky['workflow_status'])
 
-    if integral_all_sky['workflow_status'] == "done":
-        st.markdown(integral_all_sky.keys())
+        if integral_all_sky['workflow_status'] == "done":
+            st.markdown(integral_all_sky.keys())
 
-        import base64
+            import base64
 
-        st.image(base64.b64decode(integral_all_sky['data']['output']['acs_lc_png_content']))
+            st.image(base64.b64decode(integral_all_sky['data']['output']['acs_lc_png_content']))
 
-        st.image(base64.b64decode(integral_all_sky['data']['output']['excesses_mosaic_png_content']))
+            st.image(base64.b64decode(integral_all_sky['data']['output']['excesses_mosaic_png_content']))
 
         
 
@@ -1017,35 +1021,37 @@ This app displays data from INTEGRAL and POLAR, downloaded from https://www.astr
 """)
 
 
-@st.cache(ttl=1000, max_entries=10, persist=True)   #-- Magic command to cache data
-def load_igcn(t0, ra, dec, name):
-    url = f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&event_kind=UNKNOWN&test=0&_async_request=yes"
-    #st.markdown(url)
-    r = requests.get(url, auth=auth)    
+if auth is not None:
 
-    try:
-        return r.json()
-    except:
-        return r.text, url
-
-
-if source_coord is not None:
-    if st.sidebar.checkbox('Load INTEGRAL GCN'):
-        igcn = load_igcn(t0, source_coord.ra.deg, source_coord.dec.deg, source_name)
-
-        json.dump(igcn, open("igcn.json", "w"))
+    @st.cache(ttl=1000, max_entries=10, persist=True)   #-- Magic command to cache data
+    def load_igcn(t0, ra, dec, name):
+        url = f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&event_kind=UNKNOWN&test=0&_async_request=yes"
+        #st.markdown(url)
+        r = requests.get(url, auth=auth)    
 
         try:
-            st.markdown(igcn['workflow_status'])
+            return r.json()
         except:
-            st.markdown(f"{igcn[0]} {igcn[1]}")
+            return r.text, url
 
 
-        if igcn['workflow_status'] == "done":
-            st.markdown(igcn.keys())
+    if source_coord is not None:
+        if st.sidebar.checkbox('Load INTEGRAL GCN'):
+            igcn = load_igcn(t0, source_coord.ra.deg, source_coord.dec.deg, source_name)
 
-            import base64
+            json.dump(igcn, open("igcn.json", "w"))
 
-            st.image(base64.b64decode(igcn['data']['output']['acs_lc_png_content']))
+            try:
+                st.markdown(igcn['workflow_status'])
+            except:
+                st.markdown(f"{igcn[0]} {igcn[1]}")
 
-            st.image(base64.b64decode(igcn['data']['output']['excesses_mosaic_png_content']))
+
+            if igcn['workflow_status'] == "done":
+                st.markdown(igcn.keys())
+
+                import base64
+
+                st.image(base64.b64decode(igcn['data']['output']['acs_lc_png_content']))
+
+                st.image(base64.b64decode(igcn['data']['output']['excesses_mosaic_png_content']))
