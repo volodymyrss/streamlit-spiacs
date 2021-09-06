@@ -648,6 +648,11 @@ def load_integral_observations(t0, scope_d, ra, dec):
 if source_coord is not None:
     integral_observations = load_integral_observations(t0, scope_d, source_coord.ra.deg, source_coord.dec.deg)
 
+import ivis
+
+@st.cache(ttl=36000, max_entries=100, persist=True)
+def load_ivis(ra, dec):
+    return ivis.compute(target_ra=ra, target_dec=dec)
 
 if source_coord is not None:
     with _lock:
@@ -667,6 +672,52 @@ if source_coord is not None:
         plt.title(f"off-axis angle for {source_coord} - might not be the GRB at T$_0$!")
         plt.xlabel(f"days since {t0}")
         st.pyplot(fig, clear_figure=True)
+
+    visibility_map, esac_visibility_map = load_ivis(source_coord.ra.deg, source_coord.dec.deg)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        with _lock:
+            from matplotlib import pylab as plt
+            import numpy as np
+            from astropy.coordinates import SkyCoord
+            import integralvisibility
+
+            target_mp = ivis.get_target_mp(source_coord.ra.deg, source_coord.dec.deg, 1, visibility_map)
+
+            fig = plt.figure(figsize=(15,5))
+            # integralvisibility.healpy.mollview(visibility_map,title="INTEGRAL visibility at NOW",cbar=False, fig=fig)
+
+            integralvisibility.healtics.plot_with_ticks((visibility_map/visibility_map.max())*100, 
+                                                    overplot=[[(target_mp,'r',target_mp.max()/10.)]],
+                                                    vmin=0,
+                                                    cmap="summer",
+                                                    unit="%",
+                                                    title="INTEGRAL visibility at NOW",
+                                                    fig=fig)
+            st.pyplot(fig, clear_figure=True)
+
+    with col2:
+        with _lock:
+            from matplotlib import pylab as plt
+            import numpy as np
+            from astropy.coordinates import SkyCoord
+            import integralvisibility
+
+            target_mp = ivis.get_target_mp(source_coord.ra.deg, source_coord.dec.deg, 1, visibility_map)
+
+            fig = plt.figure(figsize=(15,5))
+            # integralvisibility.healpy.mollview(visibility_map,title="INTEGRAL visibility at NOW",cbar=False, fig=fig)
+
+            integralvisibility.healtics.plot_with_ticks((esac_visibility_map/esac_visibility_map.max())*100, 
+                                                    overplot=[[(target_mp,'r',target_mp.max()/10.)]],
+                                                    vmin=0,
+                                                    cmap="summer",
+                                                    unit="%",
+                                                    title="INTEGRAL visibility at NOW",
+                                                    fig=fig)
+            st.pyplot(fig, clear_figure=True)
+
 
 
 try:
