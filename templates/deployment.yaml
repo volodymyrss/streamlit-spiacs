@@ -54,7 +54,12 @@ spec:
             timeoutSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          #env:
+          env:
+            - name: CDCI_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cdci-secret
+                  key: cdci-secret.txt
           volumeMounts:          
 
       {{- with .Values.nodeSelector }}
