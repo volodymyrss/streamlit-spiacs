@@ -1059,10 +1059,10 @@ with col2:
 
         with st.expander("See notes"):
             st.markdown(f"""
-        Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
+        Total SPI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
         """)
     else:
-        st.markdown("ISGRI data could not be retrieved!")
+        st.markdown("SPI data could not be retrieved!")
         with st.expander("See notes"):
             st.markdown("Please consult the operations reports above\n" )
 
