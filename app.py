@@ -783,7 +783,6 @@ except:
 try:
     spi_events = deepcopy(load_spi(t0, dt_s_download).copy())
 except:
-    raise
     spi_events = None
 
 #isgri_image = load_isgri_image(t0).copy()
