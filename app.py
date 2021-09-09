@@ -303,6 +303,56 @@ def load_isgri(t0, dt_s):
 
     return d
 
+
+
+@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+def load_spi(t0, dt_s):
+    _t0 = Time(t0, format="isot")
+
+    disp = oda_api.api.DispatcherAPI(url="https://www.astro.unige.ch/mmoda/dispatch-data/")
+
+    t1_isot = Time(_t0.mjd - dt_s/24/3600, format="mjd").isot
+    t2_isot = Time(_t0.mjd + dt_s/24/3600, format="mjd").isot
+
+    print("t1, t2", t1_isot, t2_isot)
+
+    import integralclient as ic
+
+    d = ic.converttime("UTC", _t0.isot, "ANY")
+
+    print(d)
+
+    scw = d['SCWID']
+
+    print("scw:", scw)
+
+    url = f"http://isdcarc.unige.ch//arc/rev_3/scw/{scw[:4]}/{scw}.001/spi_oper.fits.gz"
+
+    print("url", url)
+
+    c = requests.get(url).content 
+    # f = io.BytesIO(
+    #     #requests.get(f"https://isdcarc.unige.ch/arc/FTP/arc_distr/NRT/public/scw/{scw[:4]}/{scw}/isgri_events.fits.gz").content
+    #     c
+    # )
+    # f.seek(0)
+
+    with open("tmp.fits.gz", "wb") as _:
+        _.write(c)
+    
+    f = fits.open("tmp.fits.gz")
+
+    print(f)
+
+    for e in f:
+        print(e.header.get('EXTNAME'))
+
+    d = f['SPI.-OSGL-ALL'].data
+
+    print(d.columns)
+
+    return d
+
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_isgri_image(t0):
     _t0 = Time(t0, format="isot")
@@ -729,6 +779,13 @@ try:
     isgri_events = deepcopy(load_isgri(t0, dt_s_download).copy())
 except:
     isgri_events = None
+
+try:
+    spi_events = deepcopy(load_spi(t0, dt_s_download).copy())
+except:
+    raise
+    spi_events = None
+
 #isgri_image = load_isgri_image(t0).copy()
 
 
@@ -917,7 +974,7 @@ with col2:
             # fig1 = lc.crop(cropstart, cropend).plot()
             fig3 = plt.figure(figsize=(12,4))
 
-            t = ibis_veto_lc['time'] - dt_s
+            t = (ibis_veto_lc['ijd'] - Time(t0).mjd + 51544)*24*3600
 
             plt.title("IBIS/Veto")
 
@@ -977,6 +1034,39 @@ with col1:
         st.markdown("ISGRI data could not be retrieved!")
         with st.expander("See notes"):
             st.markdown("Please consult the operations reports above\n" )
+
+
+with col2:
+    if spi_events is not None:
+        with _lock:
+            # fig1 = lc.crop(cropstart, cropend).plot()
+            fig2 = plt.figure(figsize=(12,4))
+
+            t_ijd = spi_events['TIME'][(spi_events['ENERGY']>isgri_e1) & (spi_events['ENERGY']<isgri_e2)]
+
+            h = np.histogram((t_ijd - Time(t0, format="isot").mjd + 51544) * 24 * 3600, np.linspace(-dt_s, dt_s, 300))
+
+            plt.step(
+                (h[1][1:] + h[1][:-1]), 
+                h[0]/(h[1][1:] - h[1][:-1]))
+            #fig1 = cropped.plot()
+
+            plt.xlabel(f"seconds since {t0}")
+            plt.ylabel("counts / s (full energy range)")
+            plt.title("SPI total rate")
+            plt.xlim([-dt_s, dt_s])
+
+            st.pyplot(fig2, clear_figure=True)
+
+        with st.expander("See notes"):
+            st.markdown(f"""
+        Total ISGRI, 300 bins in the requested interval. Sensitive primarily to directions within 80 deg from spacecraft pointing direction. See above for the direction.
+        """)
+    else:
+        st.markdown("ISGRI data could not be retrieved!")
+        with st.expander("See notes"):
+            st.markdown("Please consult the operations reports above\n" )
+
 
 
 if use_gbm and gbm is not None:
