@@ -657,27 +657,31 @@ st.markdown(f"""
 
 col1, col2, col3 = st.columns(3)
 
-with col1:
+try:
+    with col1:
+        st.markdown(f"""
+        INTEGRAL ScW: {integral_time['SCWID']}
+
+        {integral_sc['bodies']['earth']['separation']} km from Earth
+        Pointing to RA={integral_sc['scx']['ra']}, Dec={integral_sc['scx']['dec']}
+
+        """)    
+    with col2:
+        st.markdown(f"""
+        * [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
+        * [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
+        """
+        )
+    with col3:
+        if source_coord is not None:
+            st.markdown(f"""    
+            With respect to source RA={source_coord.ra.deg:.3f},  DEC={source_coord.dec.deg:.3f}
+
+            off-axis angle:{integral_sc['theta']:.3f}, phi={integral_sc['phi']:.3f}
+            """)
+except:
     st.markdown(f"""
-    INTEGRAL ScW: {integral_time['SCWID']}
-
-    {integral_sc['bodies']['earth']['separation']} km from Earth
-    Pointing to RA={integral_sc['scx']['ra']}, Dec={integral_sc['scx']['dec']}
-
-    """)    
-with col2:
-    st.markdown(f"""
-    * [INTEGRAL operations report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayReport.cgi?rev={integral_time['SCWID'][:4]}) 
-    * [INTEGRAL data consolidation report @ ISDC](https://www.isdc.unige.ch/integral/operations/displayConsReport.cgi?rev={integral_time['SCWID'][:4]})
-    """
-    )
-with col3:
-    if source_coord is not None:
-        st.markdown(f"""    
-        With respect to source RA={source_coord.ra.deg:.3f},  DEC={source_coord.dec.deg:.3f}
-
-        off-axis angle:{integral_sc['theta']:.3f}, phi={integral_sc['phi']:.3f}
-        """)
+        unable to decude integral pointings (this is probably ok, some observations are out of pointings)"""}
 
 st.markdown(f"""
 ***
