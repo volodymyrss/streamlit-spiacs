@@ -680,8 +680,7 @@ try:
             off-axis angle:{integral_sc['theta']:.3f}, phi={integral_sc['phi']:.3f}
             """)
 except:
-    st.markdown(f"""
-        unable to decude integral pointings (this is probably ok, some observations are out of pointings)"""}
+    st.markdown(f"""unable to deduce integral pointings (this is probably ok, some observations are out of pointings)""")
 
 st.markdown(f"""
 ***
