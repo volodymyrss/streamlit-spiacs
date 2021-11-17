@@ -259,7 +259,7 @@ def load_grb_list():
         print("\033[31m>>>>", D, "\033[0m")
 
         return {
-                    d['name']['value']: {
+                    d['name']['value'].replace('http://odahub.io/ontology#', ''): {
                         'isot': d['isot']['value'],
                         'ra': d.get('ra', {}).get('value', None),
                         'dec': d.get('dec', {}).get('value', None),
