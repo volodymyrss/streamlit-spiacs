@@ -130,14 +130,19 @@ def load_polar_lc(t0, dt_s):
 
 
 @st.cache(ttl=300, max_entries=100, persist=True)   #-- Magic command to cache data
-def load_grb_papers(name):
+def load_event_papers(name):
     try:
         import odakb
         D = odakb.sparql.select(
-            f'?paper paper:mentions_named_grb "{name}"; ?p ?o', 
+            f'?paper ?x "{name}"; ?p ?o', 
             '?paper ?p ?o',
             tojdict=True,
             limit=3000)        
+        D.update(odakb.sparql.select(
+            f'?paper paper:mentions_named_grb "{name}"; ?p ?o', 
+            '?paper ?p ?o',
+            tojdict=True,
+            limit=3000))
 
         print("D:", D)
 
@@ -509,7 +514,7 @@ else:
     t0 = eventlist.get(source_name, None)
 
     try:
-        grb_papers = load_grb_papers(source_name)
+        grb_papers = load_event_papers(source_name)
     except:
         grb_papers = {}
 
