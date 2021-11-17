@@ -54,7 +54,7 @@ st.title('MMODA Source Quick-Look: INTEGRAL (SPI-ACS + ISGRI), POLAR')
 
 
 st.write(f"""<div width="100%" align="right"> <a class="logo navbar-btn pull-left"
-        href="/mmoda/"
+        href="https://www.astro.unige.ch/mmoda/"
         title="Home"> <img
         height="50px"
         src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo.png" alt="Home" />
