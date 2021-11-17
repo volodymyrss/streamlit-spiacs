@@ -49,11 +49,46 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:", layout="wide")
 #detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('INTEGRAL (SPI-ACS + ISGRI) and POLAR Data Quickview')
+
+st.title('MMODA Source Quick-Look: INTEGRAL (SPI-ACS + ISGRI), POLAR')
+
+
+st.write(f"""<div width="100%" align="right"> <a class="logo navbar-btn pull-left"
+        href="/mmoda/"
+        title="Home"> <img
+        height="50px"
+        src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo.png" alt="Home" />
+      </a>
+      <a class="logo navbar-btn pull-left" target="_blank"
+        href="https://www.unige.ch/sciences/astro/en/"
+        title="Departement of Astronomy - university of Geneva"> <img
+        height="50px"
+        src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo-fac-sciences.png" alt="Departement of Astronomy - university of Geneva" />
+      </a>
+      <a class="logo navbar-btn pull-left" target="_blank"
+        href="https://www.isdc.unige.ch/integral/"
+        title="The INTErnational Gamma-Ray Astrophysics Laboratory - INTEGRAL"> <img
+        height="50px"
+        src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo-isdc.png" alt="The INTErnational Gamma-Ray Astrophysics Laboratory - INTEGRAL" />
+      </a>
+      <a class="logo navbar-btn pull-left"
+        href="https://www.epfl.ch/labs/lastro" target="_blank"
+        title="Laboratory of Astrophysics (LASTRO) - EPFL"> <img
+        height="50px"
+        src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo-epfl.png" alt="Laboratory of Astrophysics (LASTRO) - EPFL" />
+      </a>
+      <a class="logo navbar-btn pull-left"
+        href="https://apc.u-paris.fr/APC_CS/en" target="_blank"
+        title="Laboratoire AstroParticule et Cosmologie (APC)"> <img
+        height="50px"
+        src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo-apc.png" alt="Laboratoire AstroParticule et Cosmologie (APC)" />
+      </a></div>""", unsafe_allow_html=True)
+
 
 st.markdown("""
- * Use the menu at left to select data and set plot parameters
- * Your plots will appear below
+ * All data fetched from https://www.astro.unige.ch/mmoda/, go there to access everything!
+ * Use the menu at left to select data and set plot parameters. Your plots will appear below
+****
 """)
 
 import oda_api.api
