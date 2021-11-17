@@ -8,10 +8,13 @@
     padding-left: 1rem;
     font-weight: 700;
   }
-  .blue {
+  .red {
     background-color: lightcoral;
   }
-  .red {
+  .blue {
     background-color: lightblue;
+  }
+  .green {
+    background-color: lightgreen;
   }
   

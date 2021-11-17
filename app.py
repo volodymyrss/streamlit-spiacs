@@ -176,35 +176,50 @@ objects_of_interest = load_objects_of_interest()
 # {objects_of_interest}
 # """)
     
+import odakb
     
 @st.cache(ttl=60)   #-- Magic command to cache data
 def load_grb_list():
     try:
-        import odakb
         D = odakb.sparql.query(
             '''
             PREFIX paper: <http://odahub.io/ontology/paper#>
 
             SELECT * WHERE {
                 ?paper paper:mentions_named_grb ?name; 
-                       paper:grb_isot ?isot .
+                       paper:grb_isot ?isot;
+                       paper:gbm_ra ?ra;
+                       paper:gbm_ra ?dec .
             }
 
             ORDER BY DESC(?isot)
             LIMIT 100''', 
-            #'?name ?isot ?paper',
-            #tojdict=True,
-            )
+            )['results']['bindings']
 
-        print("\033[31m>>>>", D['results']['bindings'][0], "\033[0m")
+        D += odakb.sparql.query(
+            '''
+            PREFIX paper: <http://odahub.io/ontology/paper#>
+
+            SELECT * WHERE {
+                ?paper paper:reports_icecube_event ?name; 
+                       paper:event_isot ?isot;
+                       paper:icecube_ra ?ra;
+                       paper:icecube_dec ?dec .
+            }
+
+            ORDER BY DESC(?isot)
+            LIMIT 100''', 
+            )['results']['bindings']
+
+        print("\033[31m>>>>", D, "\033[0m")
 
         return {
                     d['name']['value']: {
                         'isot': d['isot']['value'],
+                        'ra': d.get('ra', {}).get('value', None),
+                        'dec': d.get('dec', {}).get('value', None),
                     }
-                for d in D['results']['bindings']}
-                #jq -cr '.[] | .["http://odahub.io/ontology/paper#grb_isot"][0]["@value"] + "/" + .["http://odahub.io/ontology/paper#mentions_named_grb"][0]["@value"]' | \
-                #sort -r | head -n${nrecent:-20}
+                for d in D}
     except Exception as e:
         raise
         raise RuntimeError("PROBLEM listing GRBs:", e)
@@ -401,7 +416,7 @@ use_kg_ooi = st.sidebar.checkbox('Load KG Objects of Interest of INTEGRAL QLA', 
 if use_kg_grb:
     try:
         kg_grb_list = load_grb_list()
-        st.markdown(f'Loaded {len(kg_grb_list)} GRBs from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
+        st.markdown(f'Loaded {len(kg_grb_list)} transients from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
     except Exception as e:
         raise
         st.markdown(f'sorry, could not load GRB list from KG. Maybe try later. Sorry.')
@@ -415,7 +430,6 @@ eventlist = {
     "GRB080319B": '2008-03-19T06:12:44',
     "GRB120711A": "2012-07-11T02:45:30.0",
     "GRB190114C": "2019-01-14T20:57:02.38",
-    #**load_grb_list()
     **{k: d['isot'] for k, d in kg_grb_list.items()}
 }
     
@@ -434,8 +448,9 @@ else:
 source_list += url_source_names
 
 def sort_key(n):
-    if n.startswith('GRB'):
-        return "z" + n
+    if n in eventlist:
+        return "z" + eventlist[n]
+    
     return n
 
 source_list = list(reversed(sorted(set(source_list), key=sort_key)))
@@ -548,7 +563,7 @@ from load_css import local_css
 
 local_css("style.css")
  
-st.write(f"<span class='highlight blue'>T<sub>{0}</sub> = {t0}</span>", unsafe_allow_html=True)
+st.write(f"<span class='highlight red'>T<sub>{0}</sub> = {t0}</span>", unsafe_allow_html=True)
         
 #use_gbm = st.sidebar.checkbox('Load GBM')
 use_gbm = False
@@ -609,19 +624,29 @@ from astroquery.simbad import Simbad
 
 
 if select_loc == "By name":
-    try:
-        t = Simbad.query_object(source_name)
-    except Exception as e:
-        t = None
+    source_coord = None
 
-    if t is None:
-        source_coord = None
-    else:
+    try:
         source_coord = coords.SkyCoord(
-            t['RA'][0],
-            t['DEC'][0],
-            unit=("hourangle", "deg")
+            kg_grb_list[source_name]['ra'],
+            kg_grb_list[source_name]['dec'],
+            unit="deg"
         )
+    except KeyError:
+    
+        try:
+            t = Simbad.query_object(source_name)
+        except Exception as e:
+            t = None
+
+        if t is None:
+            source_coord = None
+        else:
+            source_coord = coords.SkyCoord(
+                t['RA'][0],
+                t['DEC'][0],
+                unit=("hourangle", "deg")
+            )
 
 #    st.markdown("source:" + str(source_coord))
 else:
@@ -630,6 +655,9 @@ else:
         st.sidebar.text_input('Dec', '22').strip(),
         unit="deg"
     )
+
+st.write(f"<span class='highlight blue'>{source_coord}</span>", unsafe_allow_html=True)
+
 
 if t0 is not None:
     dt_s = dtboth / 2.0
@@ -728,8 +756,11 @@ if source_coord is not None:
 
     visibility_map, esac_visibility_map = load_ivis(source_coord.ra.deg, source_coord.dec.deg)
 
+    st.markdown("***")
+
     col1, col2 = st.columns(2)
     with col1:
+        st.markdown("simplified high-resolution visbility")
         with _lock:
             from matplotlib import pylab as plt
             import numpy as np
@@ -751,6 +782,7 @@ if source_coord is not None:
             st.pyplot(fig, clear_figure=True)
 
     with col2:
+        st.markdown("ESAC visbility")
         with _lock:
             from matplotlib import pylab as plt
             import numpy as np
