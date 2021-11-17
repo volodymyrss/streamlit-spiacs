@@ -234,7 +234,7 @@ def load_grb_list():
                 ?paper paper:mentions_named_grb ?name; 
                        paper:grb_isot ?isot;
                        paper:gbm_ra ?ra;
-                       paper:gbm_ra ?dec .
+                       paper:gbm_dec ?dec .
             }
 
             ORDER BY DESC(?isot)
@@ -567,13 +567,13 @@ else:
         
                 
         
-        for paper in reversed(sorted(grb_papers.values(), key=lambda x: x['paper:DATE'][0])):
+        for paper in reversed(sorted(grb_papers.values(), key=lambda x: x.get('paper:DATE',[''])[0])):
             cols = st.columns(3)
             #cols[0].write(paper.keys())
-            cols[0].write(f"[{paper['paper:NUMBER'][0]}]({paper['paper:location'][0]}) {paper['paper:DATE'][0]}")            
-            cols[1].write(paper['paper:title'][0])
+            cols[0].write(f"[{paper.get('paper:NUMBER', [''])[0]}]({paper.get('paper:location', [''])[0]}) {paper.get('paper:DATE', [''])[0]}")            
+            cols[1].write(paper.get('paper:title', [''])[0])
             #cols[3].write(paper.keys())
-            cols[2].write(paper['paper:gcn_authors'][0][:100]+ "...")
+            cols[2].write(paper.get('paper:gcn_authors', [''])[0][:100]+ "...")
         # for k, v in D.items():
         #     cols[0].write(k)
         #     cols[1].write(v[0])
