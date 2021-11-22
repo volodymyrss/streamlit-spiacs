@@ -827,7 +827,14 @@ if source_coord is not None:
             st.pyplot(fig, clear_figure=True)
 
     with col2:
-        st.markdown("ESAC visbility")
+        st.markdown("""
+        INTEGRAL Visibility fetched from [ESAC](https://www.esa.int/About_Us/ESAC/Contact_ESAC) <a class="logo navbar-btn pull-left"
+            target="_blank"
+            href="https://www.cosmos.esa.int/web/integral/schedule-information"
+            title="Home"> <img
+            height="20px"
+            src="https://www.cosmos.esa.int/o/CosmosTheme-theme/images/favicon.ico" alt="Home" />
+        </a>""", unsafe_allow_html=True)
         with _lock:
             from matplotlib import pylab as plt
             import numpy as np
@@ -1243,35 +1250,43 @@ This app displays data from INTEGRAL and POLAR, downloaded from https://www.astr
 
 if auth is not None:
 
-    @st.cache(ttl=1000, max_entries=10, persist=True)   #-- Magic command to cache data
+    @st.cache(ttl=5, max_entries=10, persist=False)   #-- Magic command to cache data
     def load_igcn(t0, ra, dec, name):
-        url = f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&event_kind=UNKNOWN&test=0&_async_request=yes"
+        url = (f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?"
+               f"datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&healpix_url=&event_kind=UNKNOWN&test=0&_async_request=yes")
         #st.markdown(url)
         r = requests.get(url, auth=auth)    
 
         try:
-            return r.json()
+            return r.json(), url
         except:
             return r.text, url
 
 
     if source_coord is not None:
         if st.sidebar.checkbox('Load INTEGRAL GCN'):
-            igcn = load_igcn(t0, source_coord.ra.deg, source_coord.dec.deg, source_name)
+            igcn, url = load_igcn(t0, source_coord.ra.deg, source_coord.dec.deg, source_name)
 
             json.dump(igcn, open("igcn.json", "w"))
 
             try:
-                st.markdown(igcn['workflow_status'])
+                st.markdown(f"""
+                    | | |
+                    | :--: | :--: | 
+                    | GCN workflow status | [{igcn['workflow_status']}]({url}) |
+                    """)
             except:
                 st.markdown(f"{igcn[0]} {igcn[1]}")
 
 
             if igcn['workflow_status'] == "done":
-                st.markdown(igcn.keys())
+                st.markdown(igcn['data']['output'].keys())
 
                 import base64
 
-                st.image(base64.b64decode(igcn['data']['output']['acs_lc_png_content']))
+                st.markdown(igcn['data']['output']['gcn_html'], unsafe_allow_html=True)
 
-                st.image(base64.b64decode(igcn['data']['output']['excesses_mosaic_png_content']))
+                st.image(base64.b64decode(igcn['data']['output']['sens_map_soft_png_content']))
+
+                # st.image(base64.b64decode(igcn['data']['output']['sens_map_hard_png']))
+
