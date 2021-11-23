@@ -184,6 +184,12 @@ def load_event_papers(name):
             tojdict=True,
             limit=3000))
 
+        D.update(odakb.sparql.select(
+            f'?paper paper:mentions_named_event "{name}"; ?p ?o', 
+            '?paper ?p ?o',
+            tojdict=True,
+            limit=3000))
+
         print("D:", D)
 
         return D
