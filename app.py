@@ -232,6 +232,7 @@ import odakb
 @st.cache(ttl=60)   #-- Magic command to cache data
 def load_grb_list():
     try:
+        # D = []
         D = odakb.sparql.query(
             '''
             PREFIX paper: <http://odahub.io/ontology/paper#>
@@ -244,7 +245,7 @@ def load_grb_list():
             }
 
             ORDER BY DESC(?isot)
-            LIMIT 100''', 
+            LIMIT 10000''', 
             )['results']['bindings']
 
         D += odakb.sparql.query(
@@ -252,15 +253,17 @@ def load_grb_list():
             PREFIX paper: <http://odahub.io/ontology/paper#>
 
             SELECT * WHERE {
-                ?paper paper:reports_icecube_event ?name; 
+                ?paper paper:reports_event ?name; 
                        paper:event_isot ?isot;
-                       paper:icecube_ra ?ra;
-                       paper:icecube_dec ?dec .
+                       paper:event_ra ?ra;
+                       paper:event_dec ?dec .
             }
 
             ORDER BY DESC(?isot)
-            LIMIT 100''', 
+            LIMIT 10000''', 
             )['results']['bindings']
+
+        
 
         print("\033[31m>>>>", D, "\033[0m")
 
