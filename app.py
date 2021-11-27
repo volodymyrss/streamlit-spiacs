@@ -548,7 +548,7 @@ for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'
                 </span> &nbsp;"""
     
     s += "("
-    s += ", ".join([f"<a href='{l}'>{i.split('#')[1]}</a>" for i, l in v['papers'].items()])
+    s += ", ".join([f"<a href='{l}'  target='_blank'>{i.split('#')[1]}</a>" for i, l in v['papers'].items()])
     s += ")"
     
     s +=  "&nbsp;"*5
