@@ -544,7 +544,7 @@ st.write("### Last 3 days in the sky:")
 s = ""
 for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'])):
     s += f"""<span class='highlight-small green'>
-                        {k}
+                        <a class='block' href="?source_name={k}">{k}</a>
                 </span> &nbsp;"""
     
     s += "("

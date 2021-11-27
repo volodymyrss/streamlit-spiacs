@@ -25,4 +25,25 @@
   .green {
     background-color: lightgreen;
   }
+
+  .block {
+    /* width: 100%; */
+    /* display: block; */
+    text-decoration: none;
+    white-space: nowrap;
+    color: white;
+  }
+
+
+  .block :hover {
+    /* width: 100%; */
+    /* display: block; */
+    color: white;
+  }
+
+  td {
+    /* Cell styles for demonstration purposes only */
+    border: 1px solid black;
+    width: 10em;
+  }
   
