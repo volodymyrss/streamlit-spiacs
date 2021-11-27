@@ -4,7 +4,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+import odakb
+import rdflib
 import time
 
 import requests, os
@@ -23,6 +24,7 @@ from astropy.io import fits
 # thread-safe backend.
 # See https://matplotlib.org/3.3.2/faq/howto_faq.html#working-with-threads.
 import matplotlib as mpl
+from streamlit.proto.Markdown_pb2 import Markdown
 from traitlets.traitlets import default
 mpl.use("agg")
 
@@ -87,12 +89,25 @@ st.write(f"""<div width="100%" align="right"> <a class="logo navbar-btn pull-lef
         title="Laboratoire AstroParticule et Cosmologie (APC)"> <img
         height="50px"
         src="https://www.astro.unige.ch/mmoda/sites/all/themes/bootstrap_astrooda/logo-apc.png" alt="Laboratoire AstroParticule et Cosmologie (APC)" />
-      </a></div>""", unsafe_allow_html=True)
+      </a>
+      <br>
+      <a class="logo navbar-btn pull-left"
+        target="_blank"
+        href="http://doi.org/10.17616/R38P6F" target="_blank"
+        title="INTEGRAL Archive"> <img
+        height="50px"
+        src="https://www.re3data.org/public/badges/s/light/100010657.svg" alt="Laboratoire AstroParticule et Cosmologie (APC)" />
+      </a>
+      </div>
+      """, unsafe_allow_html=True)
 
+
+#TODO: sparql and rdf!
 
 st.markdown("""
  * All data fetched from https://www.astro.unige.ch/mmoda/, go there to access everything!
  * Use the menu at left to select data and set plot parameters. Your plots will appear below
+ * *Link with out graph!* Linked Open Data: [SPARQL](), current [RDF]().
 ****
 """)
 
@@ -222,61 +237,107 @@ def load_objects_of_interest():
         raise RuntimeError("PROBLEM listing objects of interst:", e)
 
 objects_of_interest = load_objects_of_interest()
+    
 
-# st.markdown(f"""
-# {objects_of_interest}
-# """)
     
-import odakb
-    
-@st.cache(ttl=60)   #-- Magic command to cache data
-def load_grb_list():
+@st.cache(ttl=600)
+def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
     try:
-        # D = []
+        t0 = time.time()
+
         D = odakb.sparql.query(
-            '''
+            f'''
             PREFIX paper: <http://odahub.io/ontology/paper#>
 
-            SELECT * WHERE {
-                ?paper paper:mentions_named_grb ?name; 
-                       paper:grb_isot ?isot;
-                       paper:gbm_ra ?ra;
-                       paper:gbm_dec ?dec .
-            }
+            DESCRIBE ?paper WHERE {{
+                ?paper paper:timestamp ?timestamp .
+                
+                FILTER (
+                    ?timestamp > {time.time() - recent_paper_days*24*3600}
+                )
+            }}
+            
+            LIMIT 100000''', 
+            )['problem-decoding'] #['results']['bindings']
 
-            ORDER BY DESC(?isot)
-            LIMIT 10000''', 
-            )['results']['bindings']
 
-        D += odakb.sparql.query(
-            '''
-            PREFIX paper: <http://odahub.io/ontology/paper#>
+        G = rdflib.Graph()
+        G.parse(data=D, format='turtle')
 
-            SELECT * WHERE {
-                ?paper paper:reports_event ?name; 
-                       paper:event_isot ?isot;
-                       paper:event_ra ?ra;
-                       paper:event_dec ?dec .
-            }
-
-            ORDER BY DESC(?isot)
-            LIMIT 10000''', 
-            )['results']['bindings']
-
+        print(f'for last {recent_paper_days} days got {len(G)} entries in {time.time() - t0} s')
         
+        D = G.query(f'''
+            PREFIX paper: <http://odahub.io/ontology/paper#>
 
-        print("\033[31m>>>>", D, "\033[0m")
+            SELECT DISTINCT ?name WHERE {{
+                ?paper paper:mentions_named_{kind}|paper:reports_event ?name;
+                       paper:timestamp ?timestamp .
 
-        return {
-                    d['name']['value'].replace('http://odahub.io/ontology#', ''): {
-                        'isot': d['isot']['value'],
-                        'ra': d.get('ra', {}).get('value', None),
-                        'dec': d.get('dec', {}).get('value', None),
-                    }
-                for d in D}
+            }}
+            
+
+            ORDER BY DESC(?isot)
+            ''')
+
+        D = G.query(f'''
+            PREFIX paper: <http://odahub.io/ontology/paper#>
+
+            SELECT ?paper ?timestamp ?url ?name ?isot ?ra ?dec WHERE {{
+                ?paper paper:mentions_named_{kind}|paper:reports_event ?name;
+                       paper:timestamp ?timestamp .
+
+                OPTIONAL {{
+                    ?paper paper:url|paper:location ?url .
+                }}
+
+                { "OPTIONAL {{" if not with_details else "" }
+                    ?paper paper:grb_isot|paper:event_isot ?isot;
+                        paper:gbm_ra|paper:event_ra ?ra;
+                        paper:gbm_dec|paper:event_dec ?dec;
+                { "}}" if not with_details else "" }
+      
+                FILTER (
+                    ?timestamp > {time.time() - recent_paper_days*24*3600}
+                )
+
+            }}
+            
+
+            ORDER BY DESC(?isot)
+            ''')
+
+        result = {}
+
+        t0 = time.time()
+
+        for paper, timestamp, url, name, isot, ra, dec in D:
+            if not isinstance(name, rdflib.Literal):
+                print(">>>", name)
+                continue
+
+            print(name, paper)
+
+            paper = {paper: url}
+            
+            if name in result:
+                p = {**result[name]['papers'], **paper }
+            else:
+                p = paper
+
+            result[name] = {
+                'isot': isot,
+                'ra': ra,
+                'dec': dec,
+                'timestamp': timestamp,
+                'papers': p
+            }
+
+        print(f"sub-selection in {time.time() - t0}")
+
+        return result
+
     except Exception as e:
         raise
-        raise RuntimeError("PROBLEM listing GRBs:", e)
 
 
 @st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
@@ -447,7 +508,7 @@ def load_isgri_image(t0):
 
 import io
 
-@st.cache(ttl=3600, max_entries=10, persist=True)   #-- Magic command to cache data
+@st.cache(ttl=10, max_entries=10, persist=True)   #-- Magic command to cache data
 def load_ibis_veto(t0, dt_s):
     t = requests.get(f"https://www.astro.unige.ch/cdci/astrooda/dispatch-data/gw/integralhk/api/v1.0/genlc/IBIS_VETO/{t0}/{dt_s}").json()
     print("\033[31m", t, "\033[0m")
@@ -462,6 +523,29 @@ def load_ibis_veto(t0, dt_s):
 # eventlist = list(eventset)
 # eventlist.sort()
 
+st.markdown("***")
+
+now_in_the_sky = load_events("event", recent_paper_days=3, with_details=False)
+
+st.write("### Last 3 days in the sky:")
+
+s = ""
+for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'])):
+    s += f"""<span class='highlight-small green'>
+                        {k}
+                </span> &nbsp;"""
+    
+    s += "("
+    s += ", ".join([f"<a href='{l}'>{i.split('#')[1]}</a>" for i, l in v['papers'].items()])
+    s += ")"
+    
+    s +=  "&nbsp;"*5
+
+st.write(s, unsafe_allow_html=True)
+             
+st.markdown("***")
+
+
 st.sidebar.markdown("# Select Astrophysical Source")
 
 use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
@@ -469,7 +553,7 @@ use_kg_ooi = st.sidebar.checkbox('Load KG Objects of Interest of INTEGRAL QLA', 
 
 if use_kg_grb:
     try:
-        kg_grb_list = load_grb_list()
+        kg_grb_list = load_events("grb")
         st.markdown(f'Loaded {len(kg_grb_list)} transients from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
     except Exception as e:
         raise
@@ -502,9 +586,9 @@ else:
 source_list += url_source_names
 
 def sort_key(n):
-    if n in eventlist:
-        return "z" + eventlist[n]
-    
+    if n in eventlist and eventlist[n] is not None:
+        return "z" + str(eventlist[n])
+
     return n
 
 source_list = list(reversed(sorted(set(source_list), key=sort_key)))
@@ -545,16 +629,6 @@ if select_event == 'By UTC':
         t0 = st.sidebar.text_input('UTC', query_t0_utc).strip()    # -- GW150914
     else:
         t0 = st.sidebar.text_input('UTC', '2017-01-05T06:14:07').strip()    # -- GW150914
-    #st.experimental_set_query_params(t0_utc=t0, source_name=source_name)
-    #t0 = float(str_t0)
-
-    # st.sidebar.markdown("""
-    # Example times in the H1 detector:
-    # * 1126259462.4    (GW150914) 
-    # * 1187008882.4    (GW170817) 
-    # * 933200215       (hardware injection)
-    # * 1132401286.33   (Koi Fish Glitch) 
-    # """)
 
 else:
     #t0 = st.sidebar.text_input('UTC', '2008-03-19T06:12:44')    # -- GW150914
@@ -686,21 +760,23 @@ if select_loc == "By name":
             kg_grb_list[source_name]['dec'],
             unit="deg"
         )
-    except KeyError:
+    except (KeyError, TypeError):
     
         try:
             t = Simbad.query_object(source_name)
         except Exception as e:
             t = None
 
-        if t is None:
-            source_coord = None
-        else:
-            source_coord = coords.SkyCoord(
-                t['RA'][0],
-                t['DEC'][0],
-                unit=("hourangle", "deg")
-            )
+        source_coord = None
+        if t is not None:
+            try:
+                source_coord = coords.SkyCoord(
+                    t['RA'][0],
+                    t['DEC'][0],
+                    unit=("hourangle", "deg")
+                )
+            except ValueError:
+                pass
 
 #    st.markdown("source:" + str(source_coord))
 else:
@@ -1258,11 +1334,14 @@ This app displays data from INTEGRAL and POLAR, downloaded from https://www.astr
 
 
 if auth is not None:
+    # TODO!
+    event_reporting_gcn_id = 9999
 
     @st.cache(ttl=5, max_entries=10, persist=False)   #-- Magic command to cache data
     def load_igcn(t0, ra, dec, name):
         url = (f"https://oda-workflows-gcn-circular-integral-ul.odahub.io/api/v1.0/get/gcn?"
-               f"datasource=nrt&gcn_number=999999&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&healpix_url=&event_kind=UNKNOWN&test=0&_async_request=yes")
+               f"datasource=nrt&gcn_number={event_reporting_gcn_id}&name={name}&t0_utc={t0}&ra={ra:.5g}&dec={dec:.5g}&radius=5&healpix_url=&event_kind=UNKNOWN&test=0&_async_request=yes"
+               )
         #st.markdown(url)
         r = requests.get(url, auth=auth)    
 
