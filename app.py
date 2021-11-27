@@ -258,11 +258,23 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
             }}
             
             LIMIT 100000''', 
-            )['problem-decoding'] #['results']['bindings']
+            )
+
+        print("GT", D)
+            
+        try:
+            D = D['problem-decoding'] #['results']['bindings']
+        except: 
+            pass
 
 
         G = rdflib.Graph()
-        G.parse(data=D, format='turtle')
+
+        try:
+            G.parse(data=D, format='turtle')
+        except Exception as e:
+            print("problem:", D)
+            raise
 
         print(f'for last {recent_paper_days} days got {len(G)} entries in {time.time() - t0} s')
         
