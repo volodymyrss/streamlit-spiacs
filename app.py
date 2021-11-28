@@ -111,6 +111,15 @@ st.markdown("""
 ****
 """)
 
+
+st.markdown("""
+## Linked Open Data
+ * *Link with out graph!* Linked Open Data: [SPARQL](), current [RDF]().
+ * Data sources, events, workflows
+ * See associated [project](https://github.com/oda-hub/renku-aqs/tree/upgraph)
+****
+""")
+
 import oda_api.api
 
 from astropy.time import Time
