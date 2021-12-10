@@ -626,8 +626,24 @@ with st.expander("More"):
         g.from_nx(nx)
         #g.t
 
-        g.save_graph('ex.html')
-        st.components.v1.html(open('ex.html').read(), width=1200, height=600)
+        my_html_fn = 'ex.html'
+        g.save_graph(my_html_fn)
+
+        import re
+
+        extra_js = """
+          network.on( 'click', function(properties) {
+            var ids = properties.nodes;
+            var clickedNodes = nodes.get(ids);
+            console.log('clicked nodes:', clickedNodes);
+            nodes.remove({ id: ids[0] });
+        });        
+        """
+
+        n = re.sub('</body>', f'<script>{extra_js}</script></body>', open(my_html_fn).read())
+        open(my_html_fn, "w").write(n)
+
+        st.components.v1.html(open(my_html_fn).read(), width=1200, height=600)
 
 
 st.markdown("***")
