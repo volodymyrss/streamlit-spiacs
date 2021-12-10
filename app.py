@@ -1,5 +1,6 @@
 import json
 from astropy.utils.misc import indent
+from networkx.algorithms import components
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -574,7 +575,6 @@ for a, b, c in G:
 
 open("these_last_days.ttl", "w").write(G.serialize(format='turtle'))
 
-rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"))
 
 
 st.write("### Last 3 days in the sky:")
@@ -598,11 +598,36 @@ with st.expander("More"):
     with open(fn) as f:
         st.markdown("")
         st.download_button('Download RDF/Turtle', f, file_name=fn)
-    try:
-        os.system('< g.dot circo -Tpng -oa.png')
-        st.image(open('a.png', 'rb').read())
-    except:
-        pass
+
+    drawer = st.radio('', ('pyvis', 'dot/circo'))
+
+    if drawer == 'dot/circo':
+        rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"))
+        try:
+            
+            os.system('< g.dot circo -Tpng -oa.png')
+            st.image(open('a.png', 'rb').read())
+        except:
+            st.markdown('no graphvis, can not!')
+    else:
+        import pyvis
+        import networkx
+        rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"), html_labels=False)        
+
+        dot_fn = 'g.dot'
+
+        nx = networkx.drawing.nx_pydot.read_dot(dot_fn)
+
+        g = pyvis.network.Network(height='600px', width='1200px')
+        g.repulsion(node_distance=150, central_gravity=0.33,
+                       spring_length=110, spring_strength=0.10,
+                       damping=0.95)
+
+        g.from_nx(nx)
+        #g.t
+
+        g.save_graph('ex.html')
+        st.components.v1.html(open('ex.html').read(), width=1200, height=600)
 
 
 st.markdown("***")

@@ -6,3 +6,5 @@ integral-client>=1.1.9
 oda-knowledge-base[rdf,cwl]
 astroquery
 integral-visibility>=1.0.1
+networkx
+pyvis
