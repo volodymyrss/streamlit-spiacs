@@ -270,6 +270,7 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
             )
 
         print("GT", D)
+        
             
         try:
             D = D['problem-decoding'] #['results']['bindings']
@@ -299,6 +300,9 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
 
             ORDER BY DESC(?isot)
             ''')
+
+        paper_ns = rdflib.Namespace('http://odahub.io/ontology/paper#')
+        astroobject_ns = rdflib.Namespace('http://odahub.io/ontology/astroobject#')
 
         D = G.query(f'''
             PREFIX paper: <http://odahub.io/ontology/paper#>
@@ -355,7 +359,12 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
 
         print(f"sub-selection in {time.time() - t0}")
 
-        return result
+        for paper, _p, event in G.triples((None, paper_ns['mentions_named_event'], None)):
+            G.add((paper, _p, astroobject_ns[event]))
+            #G.add((paper_ns[event], ))
+
+
+        return result, G
 
     except Exception as e:
         raise
@@ -546,7 +555,27 @@ def load_ibis_veto(t0, dt_s):
 
 st.markdown("***")
 
-now_in_the_sky = load_events("event", recent_paper_days=3, with_details=False)
+now_in_the_sky, G = load_events("event", recent_paper_days=3, with_details=False)
+
+# rdf2dot all the way down!
+from rdf2dot import rdf2dot
+
+no_text_G = rdflib.Graph()
+#no_text_G.bind('paper', dict(G.namespaces())['paper'])
+no_text_G.bind('p', dict(G.namespaces())['paper'])
+
+for a, b, c in G:
+    b = dict(G.namespaces())['paper'] + "m"
+
+    if isinstance(c, rdflib.Literal):
+        pass
+    else:
+        no_text_G.add((a, b, c))
+
+open("these_last_days.ttl", "w").write(G.serialize(format='turtle'))
+
+rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"))
+
 
 st.write("### Last 3 days in the sky:")
 
@@ -563,7 +592,19 @@ for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'
     s +=  "&nbsp;"*5
 
 st.write(s, unsafe_allow_html=True)
-             
+
+with st.expander("More"):
+    fn = "these_last_days.ttl"
+    with open(fn) as f:
+        st.markdown("")
+        st.download_button('Download RDF/Turtle', f, file_name=fn)
+    try:
+        os.system('< g.dot circo -Tpng -oa.png')
+        st.image(open('a.png', 'rb').read())
+    except:
+        pass
+
+
 st.markdown("***")
 
 
@@ -574,7 +615,7 @@ use_kg_ooi = st.sidebar.checkbox('Load KG Objects of Interest of INTEGRAL QLA', 
 
 if use_kg_grb:
     try:
-        kg_grb_list = load_events("grb")
+        kg_grb_list, D = load_events("grb")
         st.markdown(f'Loaded {len(kg_grb_list)} transients from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
     except Exception as e:
         raise
