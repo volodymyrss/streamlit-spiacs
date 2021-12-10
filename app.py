@@ -556,7 +556,13 @@ def load_ibis_veto(t0, dt_s):
 
 st.markdown("***")
 
-now_in_the_sky, G = load_events("event", recent_paper_days=3, with_details=False)
+st.write("### Last days in the sky:")
+
+with st.expander("More"):
+    n_last_days = st.slider("", 1, 30, 3)
+
+
+now_in_the_sky, G = load_events("event", recent_paper_days=n_last_days, with_details=False)
 
 # rdf2dot all the way down!
 from rdf2dot import rdf2dot
@@ -577,7 +583,6 @@ open("these_last_days.ttl", "w").write(G.serialize(format='turtle'))
 
 
 
-st.write("### Last 3 days in the sky:")
 
 s = ""
 for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'])):
@@ -594,6 +599,7 @@ for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'
 st.write(s, unsafe_allow_html=True)
 
 with st.expander("More"):
+    
     fn = "these_last_days.ttl"
     with open(fn) as f:
         st.markdown("")
