@@ -8,4 +8,4 @@ astroquery
 integral-visibility>=1.0.1
 networkx
 pyvis
-rdf2dot>=0.1.4
+rdf2dot>=0.1.5
