@@ -5,7 +5,7 @@ oda-api
 integral-client>=1.1.9
 oda-knowledge-base[rdf,cwl]
 astroquery
-integral-visibility>=1.0.1
+integral-visibility>=1.0.2
 networkx
 pyvis
 rdf2dot>=0.1.5

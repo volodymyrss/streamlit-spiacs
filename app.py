@@ -608,19 +608,19 @@ with st.expander("More"):
     drawer = st.radio('', ('pyvis', 'dot/circo'))
 
     if drawer == 'dot/circo':
-        rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"))
-        try:
-            
-            os.system('< g.dot circo -Tpng -oa.png')
+        dot_fn = 'g.dot'
+        rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"))
+        try:            
+            os.system(f'< {dot_fn} circo -Tpng -oa.png')
             st.image(open('a.png', 'rb').read())
         except:
             st.markdown('no graphvis, can not!')
     else:
         import pyvis
         import networkx
-        rdf2dot.rdf2dot(no_text_G, open("g.dot", "w"), html_labels=False)        
 
-        dot_fn = 'g.dot'
+        dot_fn = 'g_no_html.dot'
+        rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"), html_labels=False)        
 
         nx = networkx.drawing.nx_pydot.read_dot(dot_fn)
 
@@ -1149,7 +1149,7 @@ with col1:
             # fig1 = lc.crop(cropstart, cropend).plot()
             fig1 = plt.figure(figsize=(12,4))
 
-            x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'] * 20**0.5, ls="", alpha=0.8)
+            x = plt.errorbar(lc['TIME'], lc['RATE'], lc['ERROR'], ls="", alpha=0.8)
             plt.step(lc['TIME'], lc['RATE'], where='mid', c=x[0].get_color(), alpha=0.8)
 
             for rebin_n in [int(dt_rebin/0.05), ]:
