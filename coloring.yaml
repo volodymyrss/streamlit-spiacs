@@ -23,8 +23,15 @@
     node_color: lightblue
     pos: false
 
+.*afterglow.*:
+    arrow: blue
+    bgcolor: white
+    node_color: lightgrey
+    pos: false
+
 .*:
     arrow: red
     bgcolor: white
     node_color: lightgrey
     pos: false
+

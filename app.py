@@ -53,6 +53,10 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:", layout="wide")
 
 # Title the app
 
+paper_ns = rdflib.Namespace('http://odahub.io/ontology/paper#')
+astroobject_ns = rdflib.Namespace('http://odahub.io/ontology/astroobject#')
+
+
 st.title('MMODA Source Quick-Look: INTEGRAL (SPI-ACS + ISGRI), POLAR')
 
 
@@ -302,8 +306,6 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
             ORDER BY DESC(?isot)
             ''')
 
-        paper_ns = rdflib.Namespace('http://odahub.io/ontology/paper#')
-        astroobject_ns = rdflib.Namespace('http://odahub.io/ontology/astroobject#')
 
         D = G.query(f'''
             PREFIX paper: <http://odahub.io/ontology/paper#>
@@ -360,11 +362,19 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
 
         print(f"sub-selection in {time.time() - t0}")
 
+        for paper, event, characteristic in G.query(f'''
+            SELECT ?paper ?event ?characteristic WHERE {{
+                ?paper paper:mentions_named_event ?event;
+                       paper:reports_characteristic ?characteristic .                       
+            }}
+        '''):
+            print("!", paper, event, characteristic)
+            G.add((paper, paper_ns['reports_' + characteristic + '_for'],  astroobject_ns[event]))
+
         for paper, _p, event in G.triples((None, paper_ns['mentions_named_event'], None)):
             G.add((paper, _p, astroobject_ns[event]))
             #G.add((paper_ns[event], ))
-
-
+        
         return result, G
 
     except Exception as e:
@@ -558,8 +568,8 @@ st.markdown("***")
 
 st.write("### Last days in the sky:")
 
-with st.expander("More"):
-    n_last_days = st.slider("", 1, 30, 3)
+# with st.expander("More"):
+n_last_days = st.slider("", 1, 30, 3)
 
 
 now_in_the_sky, G = load_events("event", recent_paper_days=n_last_days, with_details=False)
@@ -569,18 +579,22 @@ from rdf2dot import rdf2dot
 
 no_text_G = rdflib.Graph()
 #no_text_G.bind('paper', dict(G.namespaces())['paper'])
-no_text_G.bind('p', dict(G.namespaces())['paper'])
+no_text_G.bind('.', dict(G.namespaces())['paper'])
 
 for a, b, c in G:
-    b = dict(G.namespaces())['paper'] + "m"
-
+    if 'afterglow' in b:
+        print(">>>", a, b, c)
+        b = paper_ns["afterglow"]
+    else:
+        b = paper_ns["m"]            
+    
     if isinstance(c, rdflib.Literal):
         pass
     else:
         no_text_G.add((a, b, c))
+        print(">>", a, b, c)
 
 open("these_last_days.ttl", "w").write(G.serialize(format='turtle'))
-
 
 
 
@@ -598,58 +612,99 @@ for k, v in sorted(now_in_the_sky.items(), key=lambda a: -float(a[1]['timestamp'
 
 st.write(s, unsafe_allow_html=True)
 
-with st.expander("More"):
+# with st.expander("More"):
     
-    fn = "these_last_days.ttl"
-    with open(fn) as f:
-        st.markdown("")
-        st.download_button('Download RDF/Turtle', f, file_name=fn)
+vis_width = 1200
+vis_height = 800
 
-    drawer = st.radio('', ('pyvis', 'dot/circo'))
+fn = "these_last_days.ttl"
+with open(fn) as f:
+    st.markdown("")
+    st.download_button('Download RDF/Turtle', f, file_name=fn)
 
-    if drawer == 'dot/circo':
-        dot_fn = 'g.dot'
-        rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"))
-        try:            
-            os.system(f'< {dot_fn} circo -Tpng -oa.png')
-            st.image(open('a.png', 'rb').read())
-        except:
-            st.markdown('no graphvis, can not!')
-    else:
-        import pyvis
-        import networkx
+drawer = st.radio('', ('pyvis', 'dot/circo'))
 
-        dot_fn = 'g_no_html.dot'
-        rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"), html_labels=False)        
+if drawer == 'dot/circo':
+    dot_fn = 'g.dot'
+    rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"))
+    try:            
+        os.system(f'< {dot_fn} circo -Tpng -oa.png')
+        st.image(open('a.png', 'rb').read())
+    except:
+        st.markdown('no graphvis, can not!')
+else:
+    import pyvis
+    import networkx
 
-        nx = networkx.drawing.nx_pydot.read_dot(dot_fn)
+    dot_fn = 'g_no_html.dot'
+    rdf2dot.rdf2dot(no_text_G, open(dot_fn, "w"), html_labels=False)        
 
-        g = pyvis.network.Network(height='600px', width='1200px')
-        g.repulsion(node_distance=150, central_gravity=0.33,
-                       spring_length=110, spring_strength=0.10,
-                       damping=0.95)
+    nx = networkx.drawing.nx_pydot.read_dot(dot_fn)
 
-        g.from_nx(nx)
-        #g.t
+    g = pyvis.network.Network(height=f'{vis_height}px', width=f'{vis_width}px')
+    g.repulsion(node_distance=150, central_gravity=0.33,
+                spring_length=110, spring_strength=0.10,
+                damping=0.95)
 
-        my_html_fn = 'ex.html'
-        g.save_graph(my_html_fn)
+    g.from_nx(nx)
+    #g.t
 
-        import re
+    my_html_fn = 'ex.html'
+    g.save_graph(my_html_fn)
 
-        extra_js = """
-          network.on( 'click', function(properties) {
+    import re
+
+    #https://visjs.github.io/vis-network/examples/network/events/interactionEvents.html
+
+    extra_js = """
+        makeId = () => {
+            let ID = "";
+            let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            for ( var i = 0; i < 12; i++ ) {
+                ID += characters.charAt(Math.floor(Math.random() * 36));
+            }
+            return ID;
+        }
+
+        network.on( 'click', function(properties) {
             var ids = properties.nodes;
             var clickedNodes = nodes.get(ids);
             console.log('clicked nodes:', clickedNodes);
-            nodes.remove({ id: ids[0] });
+            clicked_id = clickedNodes[0].id
+            new_node_id = makeId();
+            nodes.add({ id: new_node_id, label: clickedNodes[0].label});
+            
+            network.body.data.edges.add([{from: new_node_id, to: clicked_id}])
+            
+        });
+
+        network.on( 'showPopup', function(properties) {
+            var ids = properties.nodes;
+            var cNodes = nodes.get(ids);
+            console.log('showPopup nodes:', cNodes);
+        });
+
+        network.on( 'blurNode', function(properties) {
+            var ids = properties.nodes;
+            var cNodes = nodes.get(ids);
+            console.log('blur nodes:', cNodes);
+        });
+        
+
+        network.on( 'doubleClick', function(properties) {
+            var ids = properties.nodes;
+            var clickedNodes = nodes.get(ids);
+            console.log('clicked nodes:', clickedNodes);
+            clicked_id = clickedNodes[0].id
+            new_node_id = makeId();
+            nodes.add({ id: new_node_id, label: clickedNodes[0].label});                        
         });        
-        """
+    """
 
-        n = re.sub('</body>', f'<script>{extra_js}</script></body>', open(my_html_fn).read())
-        open(my_html_fn, "w").write(n)
+    n = re.sub('</body>', f'<script>{extra_js}</script></body>', open(my_html_fn).read())
+    open(my_html_fn, "w").write(n)
 
-        st.components.v1.html(open(my_html_fn).read(), width=1200, height=600)
+    st.components.v1.html(open(my_html_fn).read(), width=vis_width, height=vis_height)
 
 
 st.markdown("***")
