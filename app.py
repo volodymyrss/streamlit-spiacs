@@ -54,6 +54,7 @@ st.set_page_config(page_title=apptitle, page_icon=":eyeglasses:", layout="wide")
 # Title the app
 
 paper_ns = rdflib.Namespace('http://odahub.io/ontology/paper#')
+topic_ns =  rdflib.Namespace('http://odahub.io/ontology/paper/topic#')
 astroobject_ns = rdflib.Namespace('http://odahub.io/ontology/astroobject#')
 
 
@@ -255,7 +256,7 @@ objects_of_interest = load_objects_of_interest()
 
     
 @st.cache(ttl=600)
-def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
+def load_events(kind="grb", recent_paper_days=30*6, with_details=True, time_seq=0):
     try:
         t0 = time.time()
 
@@ -274,7 +275,7 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
             LIMIT 100000''', 
             )
 
-        print("GT", D)
+        # print("GT", D)
         
             
         try:
@@ -310,13 +311,22 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
         D = G.query(f'''
             PREFIX paper: <http://odahub.io/ontology/paper#>
 
-            SELECT ?paper ?timestamp ?url ?name ?isot ?ra ?dec WHERE {{
+            SELECT ?paper ?timestamp ?url ?name ?isot ?ra ?dec ?citation ?topic WHERE {{
                 ?paper paper:mentions_named_{kind}|paper:reports_event ?name;
                        paper:timestamp ?timestamp .
 
                 OPTIONAL {{
                     ?paper paper:url|paper:location ?url .
                 }}
+
+                OPTIONAL {{
+                    ?paper paper:cites ?citation .
+                }}
+
+                OPTIONAL {{
+                    ?paper paper:topics ?topic .
+                }}
+
 
                 { "OPTIONAL {{" if not with_details else "" }
                     ?paper paper:grb_isot|paper:event_isot ?isot;
@@ -338,12 +348,13 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
 
         t0 = time.time()
 
-        for paper, timestamp, url, name, isot, ra, dec in D:
+        for paper, timestamp, url, name, isot, ra, dec, citation, topic in D:
             if not isinstance(name, rdflib.Literal):
-                print(">>>", name)
+                # print(">>>", name)
                 continue
 
-            print(name, paper)
+
+            # print(name, paper)
 
             paper = {paper: url}
             
@@ -368,7 +379,7 @@ def load_events(kind="grb", recent_paper_days=30*6, with_details=True):
                        paper:reports_characteristic ?characteristic .                       
             }}
         '''):
-            print("!", paper, event, characteristic)
+            # print("!", paper, event, characteristic)
             G.add((paper, paper_ns['reports_' + characteristic + '_for'],  astroobject_ns[event]))
 
         for paper, _p, event in G.triples((None, paper_ns['mentions_named_event'], None)):
@@ -582,9 +593,16 @@ no_text_G = rdflib.Graph()
 no_text_G.bind('.', dict(G.namespaces())['paper'])
 
 for a, b, c in G:
+    print("will draw triple >>>", a, b, c)
     if 'afterglow' in b:
-        print(">>>", a, b, c)
         b = paper_ns["afterglow"]
+    if 'topic' in b:
+        b = paper_ns["topic"]
+        c = topic_ns[c]
+    elif 'cites' in b:
+        b = paper_ns["cites"]
+        if str(c).startswith('http'):
+            c = rdflib.URIRef(c)
     else:
         b = paper_ns["m"]            
     
@@ -592,7 +610,7 @@ for a, b, c in G:
         pass
     else:
         no_text_G.add((a, b, c))
-        print(">>", a, b, c)
+        # print(">>", a, b, c)
 
 open("these_last_days.ttl", "w").write(G.serialize(format='turtle'))
 
@@ -715,9 +733,11 @@ st.sidebar.markdown("# Select Astrophysical Source")
 use_kg_grb = st.sidebar.checkbox('Load KG GRBs from GCNs', value=True)
 use_kg_ooi = st.sidebar.checkbox('Load KG Objects of Interest of INTEGRAL QLA', value=True)
 
+time_seq = int(time.time())%60
+
 if use_kg_grb:
     try:
-        kg_grb_list, D = load_events("grb")
+        kg_grb_list, D = load_events("grb", time_seq=time_seq)
         st.markdown(f'Loaded {len(kg_grb_list)} transients from KG, the last one is {list(sorted(kg_grb_list.keys()))[-1]}!')
     except Exception as e:
         raise

@@ -23,8 +23,27 @@
     node_color: lightblue
     pos: false
 
+.*paper/topic.*:
+    bgcolor: lightgreen
+    node_color: lightgreen
+    pos: false
+
 .*afterglow.*:
     arrow: blue
+    bgcolor: white
+    node_color: lightgrey
+    pos: false
+
+
+.*cites.*:
+    arrow: magenta
+    bgcolor: white
+    node_color: lightgrey
+    pos: false
+
+
+.*topic.*:
+    arrow: green
     bgcolor: white
     node_color: lightgrey
     pos: false
