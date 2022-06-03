@@ -1068,7 +1068,11 @@ if source_coord is not None:
         plt.xlabel(f"days since {t0}")
         st.pyplot(fig, clear_figure=True)
 
-    visibility_map, esac_visibility_map = load_ivis(source_coord.ra.deg, source_coord.dec.deg)
+    try:
+        visibility_map, esac_visibility_map = load_ivis(source_coord.ra.deg, source_coord.dec.deg)
+    except Exception as e:
+        print("exception for accessing visibility origins")
+        raise
 
     st.markdown("***")
 
