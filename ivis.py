@@ -6,6 +6,9 @@ import integralclient as ic
 import datetime
 import numpy as np
 
+class ServiceResponseProblem(Exception):
+    pass
+
 def get_target_mp(target_ra, target_dec, target_radius, basemp):
     radec=integralvisibility.healpy.pix2ang(integralvisibility.healpy.npix2nside(len(basemp)), range(len(basemp)), lonlat=True)
     ra,dec=radec
@@ -48,8 +51,10 @@ def compute(
     sc = ic.get_sc(tstart_utc)
     sc
 
-    now_point = SkyCoord(sc['scx']['ra'], sc['scx']['dec'], unit='deg')
-    now_point
+    try:
+        now_point = SkyCoord(sc['scx']['ra'], sc['scx']['dec'], unit='deg')
+    except Exception as e:        
+        raise ServiceResponseProblem(f"problem with sc response for {tstart_utc}: {sc}")
 
     # #http://integral.esac.esa.int/isocweb/tvp.html?revolution=2050&action=perRevolution
     # r=requests.get("http://integral.esac.esa.int/isocweb/tvp.html",

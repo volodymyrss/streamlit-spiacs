@@ -255,7 +255,7 @@ objects_of_interest = load_objects_of_interest()
     
 
     
-@st.cache(ttl=600)
+@st.cache(ttl=600, allow_output_mutation=True)
 def load_events(kind="grb", recent_paper_days=30*6, with_details=True, time_seq=0):
     try:
         t0 = time.time()
@@ -1071,7 +1071,7 @@ if source_coord is not None:
     try:
         visibility_map, esac_visibility_map = load_ivis(source_coord.ra.deg, source_coord.dec.deg)
     except Exception as e:
-        print("exception for accessing visibility origins")
+        print("\033[31mexception for accessing visibility origins:\033[0m", e)
         raise
 
     st.markdown("***")
